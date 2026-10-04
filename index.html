@@ -37,9 +37,9 @@ h1 span{color:var(--court)}
 h2{font-family:var(--display);font-weight:600;font-size:1.25rem;letter-spacing:.04em;text-transform:uppercase;margin:0;color:var(--muted)}
 section{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
-.slots{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.slots{display:grid;grid-template-columns:1fr;gap:12px}
 @media (max-width:560px){.slots{grid-template-columns:1fr}}
-.slot{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0;border-left:4px solid var(--c)}
+.slot{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0;border-left:4px solid var(--court)}
 .slot[data-k="A"]{--c:var(--pa)} .slot[data-k="B"]{--c:var(--pb)}
 .slot-head{display:flex;align-items:center;gap:8px}
 .badge{font-family:var(--display);font-weight:700;font-size:1rem;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:var(--surface);flex:none}
@@ -89,7 +89,8 @@ input[type=range]{width:100%;accent-color:var(--court)}
 .rally .no{font-family:var(--display);font-weight:700;font-size:1.1rem;width:2.2em;font-variant-numeric:tabular-nums}
 .rally .t{font-variant-numeric:tabular-nums;font-size:.9rem;min-width:0}
 .rally .t small{color:var(--muted);display:block;font-size:.78rem}
-.chips{display:flex;gap:4px}
+.chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.chip.cs{color:var(--court)} .chip.cm{color:var(--muted)} .chip.cw{color:var(--warn);border-style:dashed}
 .chip{font-size:.75rem;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid currentColor;font-variant-numeric:tabular-nums;white-space:nowrap}
 .rally button{padding:6px 10px}
 input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
@@ -138,7 +139,7 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
 <div class="wrap">
   <header>
     <h1>랠리<span>컷</span></h1>
-    <span class="tag">랠리 하이라이트부터 자세 분석까지, 테니스 영상 한 번에</span>
+    <span class="tag">타구음으로 랠리만 골라내는 테니스 하이라이트 편집기</span>
   </header>
 
   <section>
@@ -146,14 +147,14 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
     <div class="panel">
       <div class="slots">
         <div class="slot" data-k="A">
-          <div class="slot-head"><span class="badge">A</span><input type="text" id="nameA" value="A" aria-label="A 선수 이름"></div>
-          <label class="btn pick">A 뒤 카메라 영상 고르기<input type="file" id="fileA" accept="video/*,.mov,.mp4"></label>
+          <input type="text" id="nameA" value="가까운 쪽" hidden aria-hidden="true">
+          <label class="btn pick">테니스 영상 고르기<input type="file" id="fileA" accept="video/*,.mov,.mp4"></label>
           <video class="peek" id="peekA" playsinline muted preload="metadata" hidden></video>
           <div class="file" id="infoA">아직 없음</div>
           <div class="bar"><i id="progA"></i></div>
         </div>
-        <div class="slot" data-k="B">
-          <div class="slot-head"><span class="badge">B</span><input type="text" id="nameB" value="B" aria-label="B 선수 이름"></div>
+        <div class="slot" data-k="B" hidden>
+          <div class="slot-head"><span class="badge">B</span><input type="text" id="nameB" value="먼 쪽" aria-label="B"></div>
           <label class="btn pick">B 뒤 카메라 영상 고르기<input type="file" id="fileB" accept="video/*,.mov,.mp4"></label>
           <video class="peek" id="peekB" playsinline muted preload="metadata" hidden></video>
           <div class="file" id="infoB">선택 사항 (한 대만 찍었으면 비워두세요)</div>
@@ -177,9 +178,9 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
   <div class="empty" id="emptyState">
     분석이 끝나면 여기에 결과가 나와요.
     <ol>
-      <li>두 영상의 타구음을 비교해 시간을 자동으로 맞춥니다.</li>
-      <li>"펑" 소리가 이어지는 구간을 랠리로 묶고, 공 줍는 시간은 뺍니다.</li>
-      <li>소리가 먼저 들린 쪽 카메라로 누가 쳤는지 구분합니다.</li>
+      <li>영상의 소리에서 라켓에 공이 맞는 "탁" 소리를 찾습니다.</li>
+      <li>타구음이 이어지는 구간을 랠리로 묶고, 공 줍는 시간은 뺍니다.</li>
+      <li>소리 크기로 카메라에 가까운 쪽과 먼 쪽 타구를 구분합니다.</li>
       <li>랠리만 이어서 보거나, 원본 화질 그대로 빠르게 저장합니다.</li>
     </ol>
   </div>
@@ -208,11 +209,12 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
       <details class="panel">
         <summary>감지 설정</summary>
         <div class="ctrls">
-          <div class="ctrl"><label for="sens">타구음 감도 <output id="oSens"></output></label><input type="range" id="sens" min="1" max="10" step="1" value="6"><p class="hint">공 줍는 구간이 섞이면 낮추고, 랠리가 끊기면 올리세요.</p></div>
-          <div class="ctrl"><label for="gap">랠리로 묶는 간격 <output id="oGap"></output></label><input type="range" id="gap" min="2" max="8" step="0.5" value="4"></div>
-          <div class="ctrl"><label for="pre">랠리 앞 여유 <output id="oPre"></output></label><input type="range" id="pre" min="0" max="5" step="0.5" value="1.5"></div>
-          <div class="ctrl"><label for="post">랠리 뒤 여유 <output id="oPost"></output></label><input type="range" id="post" min="0" max="5" step="0.5" value="2"></div>
-          <div class="ctrl"><label for="minHits">최소 타구 수 <output id="oMin"></output></label><input type="range" id="minHits" min="1" max="6" step="1" value="2"></div>
+          <div class="ctrl"><label for="sens">타구음 감도 <output id="oSens"></output></label><input type="range" id="sens" min="1" max="10" step="1" value="7"><p class="hint">작은 소리까지 타구로 볼지 정해요. 먼 쪽 타구를 자꾸 놓치면 올리세요.</p></div>
+          <div class="ctrl"><label for="strict">랠리 판정 엄격함 <output id="oStrict"></output></label><input type="range" id="strict" min="1" max="5" step="1" value="1"><p class="hint">기본은 '느슨'이라 공 치는 장면을 최대한 다 넣어요. 잡소리 구간이 너무 많으면 올리세요.</p></div>
+          <div class="ctrl"><label for="gap">랠리로 묶는 간격 <output id="oGap"></output></label><input type="range" id="gap" min="2" max="10" step="0.5" value="6"></div>
+          <div class="ctrl"><label for="pre">랠리 앞 여유 <output id="oPre"></output></label><input type="range" id="pre" min="0" max="6" step="0.5" value="2.5"></div>
+          <div class="ctrl"><label for="post">랠리 뒤 여유 <output id="oPost"></output></label><input type="range" id="post" min="0" max="6" step="0.5" value="3"></div>
+          <div class="ctrl"><label for="minHits">최소 타구 수 <output id="oMin"></output></label><input type="range" id="minHits" min="1" max="8" step="1" value="2"></div>
         </div>
       </details>
     </section>
@@ -238,14 +240,14 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
     </section>
 
     <section>
-      <div class="row" style="justify-content:space-between"><h2>랠리 목록</h2><button id="toggleAll">모두 해제</button></div>
+      <div class="row" style="justify-content:space-between"><h2>랠리 목록</h2><div class="row"><button id="weakBtn" hidden>애매한 구간 보기</button><button id="toggleAll">모두 해제</button></div></div>
       <div class="list" id="list"></div>
     </section>
 
     <section>
       <h2>4 · 저장</h2>
       <div class="panel">
-        <p class="hint">하이라이트는 체크된 랠리 전체를, 스윙 모음은 그 안에서 본인이 친 순간 앞 1.5초~뒤 1초만 모아요. 둘 다 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 구간 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
+        <p class="hint">하이라이트는 체크된 랠리 전체를, 타구만 모음은 그 안에서 가까운 쪽 선수가 친 순간 앞 1.5초~뒤 1초만 모아요. 둘 다 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 구간 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
         <div class="row">
           <button class="primary" id="expA">A 하이라이트 만들기</button>
           <button class="primary" id="expB">B 하이라이트 만들기</button>
@@ -260,47 +262,6 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
       </div>
     </section>
 
-    <section>
-      <h2>5 · 자세 분석</h2>
-      <div class="panel">
-        <p class="hint">체크된 랠리 안에서 각자 친 순간마다 관절을 인식해 샷 종류와 자세 수치를 계산해요. 처음 한 번은 관절 인식 모델을 받아오느라 조금 걸려요.</p>
-        <div class="handrow" id="handRowA"><span class="badge">A</span><span id="hnA">A</span>
-          <div class="seg" role="group" aria-label="A 주로 쓰는 손"><button data-h="R" aria-pressed="true" id="hAR">오른손잡이</button><button data-h="L" aria-pressed="false" id="hAL">왼손잡이</button></div></div>
-        <div class="handrow" id="handRowB"><span class="badge">B</span><span id="hnB">B</span>
-          <div class="seg" role="group" aria-label="B 주로 쓰는 손"><button data-h="R" aria-pressed="true" id="hBR">오른손잡이</button><button data-h="L" aria-pressed="false" id="hBL">왼손잡이</button></div></div>
-        <div class="row">
-          <div class="seg" id="modelSeg" role="group" aria-label="분석 정확도">
-            <button data-m="lite" aria-pressed="true" id="mLite">빠르게</button>
-            <button data-m="full" aria-pressed="false" id="mFull">정확하게</button>
-          </div>
-          <button class="primary" id="poseGo">자세 분석 시작</button>
-          <button id="poseCancel" hidden>멈추기</button>
-        </div>
-        <div class="bar"><i id="poseProg"></i></div>
-        <span class="status" id="poseStatus"></span>
-      </div>
-
-      <div id="poseResults" hidden style="display:flex;flex-direction:column;gap:12px">
-        <div class="tablewrap"><table id="sumTable"></table></div>
-        <p class="hint">카메라 한 대로 추정한 값이라 정확한 각도보다는 스윙끼리 비교하는 용도로 보세요. 타점 높이는 허리 0% · 어깨 100% 기준이고, 무릎 각도는 작을수록 많이 굽힌 거예요.</p>
-        <div class="player"><video id="sv" playsinline muted preload="auto"></video><canvas id="sov"></canvas></div>
-        <div class="row">
-          <div class="seg" id="rateSeg" role="group" aria-label="재생 속도">
-            <button data-r="1" aria-pressed="false" id="r1">1x</button>
-            <button data-r="0.5" aria-pressed="true" id="r05">0.5x</button>
-            <button data-r="0.25" aria-pressed="false" id="r025">0.25x</button>
-          </div>
-          <button id="replay">다시 보기</button>
-          <button id="skel" aria-pressed="true">관절선 끄기</button>
-          <span class="nowplaying" id="snow">아래 카드에서 '보기'를 누르세요.</span>
-        </div>
-        <div class="row" style="justify-content:space-between"><h2>스윙 목록</h2>
-          <div class="seg" id="fltSeg" role="group" aria-label="선수 필터"><button data-f="all" aria-pressed="true" id="fAll">전체</button><button data-f="A" aria-pressed="false" id="fA">A</button><button data-f="B" aria-pressed="false" id="fB">B</button></div></div>
-        <span class="hint">'비교'를 두 개 고르면 나란히 보여줘요. A와 B의 스윙끼리도 비교할 수 있어요.</span>
-        <div class="panel" id="compare" hidden></div>
-        <div class="cards" id="cards"></div>
-      </div>
-    </section>
   </div>
 </div>
 
@@ -392,7 +353,7 @@ function blobSink(){
 
 const cams = { A: null, B: null };
 const files = { A: null, B: null };
-const P = { sens: 6, gap: 4, pre: 1.5, post: 2, minHits: 2 };
+const P = { sens: 7, strict: 1, gap: 6, pre: 2.5, post: 3, minHits: 2 };
 let sync = null, events = [], rallies = [], view = 'both', split = false;
 
 /* ---------- 파일 선택 ---------- */
@@ -494,10 +455,10 @@ function trace(msg){ try { localStorage.setItem(TRACE_KEY, JSON.stringify({ msg,
 function clearTrace(){ try { localStorage.removeItem(TRACE_KEY); } catch {} }
 // 저장하는 동안 미리보기 영상들이 쥐고 있는 메모리를 놓아준다
 function releaseVideos(){
-  for (const el of [vids.A, vids.B, $('peekA'), $('peekB'), $('sv')]) { try { el.pause(); if (el.getAttribute('src')) { el.dataset.src = el.getAttribute('src'); el.removeAttribute('src'); el.load(); } } catch {} }
+  for (const el of [vids.A, vids.B, $('peekA'), $('peekB')]) { try { el.pause(); if (el.getAttribute('src')) { el.dataset.src = el.getAttribute('src'); el.removeAttribute('src'); el.load(); } } catch {} }
 }
 function restoreVideos(){
-  for (const el of [vids.A, vids.B, $('peekA'), $('peekB'), $('sv')]) { try { if (el.dataset.src && !el.getAttribute('src')) { el.src = el.dataset.src; } delete el.dataset.src; } catch {} }
+  for (const el of [vids.A, vids.B, $('peekA'), $('peekB')]) { try { if (el.dataset.src && !el.getAttribute('src')) { el.src = el.dataset.src; } delete el.dataset.src; } catch {} }
 }
 
 /* ---------- 문제 확인용 정보 ---------- */
@@ -523,8 +484,14 @@ try {
   clearTrace();
 } catch {}
 function nm(k){ return ($('name'+k).value.trim() || k); }
+function updateLabelsLite(){
+  $('sAlab').textContent = split ? `${nm('A')} 타구` : '타구'; $('legA').textContent = split ? `${nm('A')} 타구` : '타구';
+}
 function updateLabels(){
-  for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('exp'+k).textContent = `${nm(k)} 하이라이트 만들기`; $('sw'+k).textContent = `${nm(k)} 스윙만 모음`; $('hn'+k).textContent = nm(k); $('f'+k).textContent = nm(k); $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
+  for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
+  $('expA').textContent = '하이라이트 만들기';
+  $('swA').textContent = `${nm('A')} 타구만 모음`;
+  if (!split) { $('sAlab').textContent = '타구'; $('legA').textContent = '타구'; }
   renderList();
 }
 
@@ -532,22 +499,28 @@ function updateLabels(){
 class EnvProc {
   constructor(sr, t0, durSec){
     this.sr = sr; this.t0 = t0; this.hop = Math.round(sr*0.005); this.hopSec = this.hop/sr;
-    this.env = new Float32Array(Math.ceil(durSec/this.hopSec) + 400); this.n = 0; this.acc = 0; this.cnt = 0;
-    const f0 = 2000, Q = Math.SQRT1_2, w = 2*Math.PI*f0/sr, c = Math.cos(w), s = Math.sin(w), al = s/(2*Q), a0 = 1+al;
-    this.b0 = (1+c)/2/a0; this.b1 = -(1+c)/a0; this.b2 = this.b0; this.a1 = -2*c/a0; this.a2 = (1-al)/a0;
-    this.x1 = this.x2 = this.y1 = this.y2 = 0;
+    const cap = Math.ceil(durSec/this.hopSec) + 400;
+    this.env = new Float32Array(cap); this.envLo = new Float32Array(cap); this.n = 0; this.acc = 0; this.accL = 0; this.cnt = 0;
+    const bq = (f0, hp) => { const Q = Math.SQRT1_2, w = 2*Math.PI*f0/sr, c = Math.cos(w), sn = Math.sin(w), al = sn/(2*Q), a0 = 1+al;
+      return hp ? [(1+c)/2/a0, -(1+c)/a0, (1+c)/2/a0, -2*c/a0, (1-al)/a0] : [(1-c)/2/a0, (1-c)/a0, (1-c)/2/a0, -2*c/a0, (1-al)/a0]; };
+    this.H = bq(2000, true); this.L = bq(700, false);
+    this.hs = [0,0,0,0]; this.ls = [0,0,0,0];
   }
   push(buf){
-    let {b0,b1,b2,a1,a2,x1,x2,y1,y2,acc,cnt,hop} = this;
+    const [b0,b1,b2,a1,a2] = this.H, [c0,c1,c2,d1,d2] = this.L, hop = this.hop;
+    let [x1,x2,y1,y2] = this.hs, [u1,u2,v1,v2] = this.ls, acc = this.acc, accL = this.accL, cnt = this.cnt;
     for (let i = 0; i < buf.length; i++) {
-      const x = buf[i]; const y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
-      x2 = x1; x1 = x; y2 = y1; y1 = y; acc += y*y;
+      const x = buf[i];
+      const y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2; y2 = y1; y1 = y; acc += y*y;
+      const v = c0*x + c1*x1 + c2*x2 - d1*v1 - d2*v2; v2 = v1; v1 = v; accL += v*v;
+      x2 = x1; x1 = x;
       if (++cnt === hop) {
-        if (this.n >= this.env.length) { const g = new Float32Array(this.env.length*2); g.set(this.env); this.env = g; }
-        this.env[this.n++] = 10*Math.log10(acc/hop + 1e-12); acc = 0; cnt = 0;
+        if (this.n >= this.env.length) { for (const key of ['env','envLo']) { const g = new Float32Array(this[key].length*2); g.set(this[key]); this[key] = g; } }
+        this.env[this.n] = 10*Math.log10(acc/hop + 1e-12); this.envLo[this.n] = 10*Math.log10(accL/hop + 1e-12); this.n++;
+        acc = 0; accL = 0; cnt = 0;
       }
     }
-    Object.assign(this, {x1,x2,y1,y2,acc,cnt});
+    this.hs = [x1,x2,y1,y2]; this.ls = [u1,u2,v1,v2]; this.acc = acc; this.accL = accL; this.cnt = cnt;
   }
 }
 
@@ -582,7 +555,7 @@ async function analyzeAudio(k, onProg){
   }
   if (!direct) { console.info('대체 디코딩 사용'); proc = await decodeFallback(M, aTrack, first, duration, onProg); }
   onProg(1);
-  return { input, vTrack, aTrack, duration, env: proc.env.subarray(0, proc.n), n: proc.n, hopSec: proc.hopSec, t0: proc.t0 };
+  return { input, vTrack, aTrack, duration, env: proc.env.subarray(0, proc.n), envLo: proc.envLo.subarray(0, proc.n), n: proc.n, hopSec: proc.hopSec, t0: proc.t0 };
 }
 
 // AudioDecoder가 없는 브라우저: 20초씩 오디오만 m4a로 감싸서 decodeAudioData
@@ -622,32 +595,43 @@ async function decodeFallback(M, aTrack, first, duration, onProg){
 }
 
 /* ---------- 타구 감지 ---------- */
-function background(cam){
-  const B = 200, { env, n } = cam, nb = Math.ceil(n/B), blk = new Float32Array(nb);
+function bgBlocks(env, n){
+  const B = 200, nb = Math.ceil(n/B), blk = new Float32Array(nb);
   for (let b = 0; b < nb; b++) { const a = Array.from(env.subarray(b*B, Math.min(n, (b+1)*B))).sort((x,y)=>x-y); blk[b] = a[Math.floor(a.length*0.2)] ?? -120; }
   const sm = new Float32Array(nb);
   for (let b = 0; b < nb; b++) { const w = []; for (let j = b-2; j <= b+2; j++) if (j >= 0 && j < nb) w.push(blk[j]); w.sort((x,y)=>x-y); sm[b] = w[w.length>>1]; }
-  cam.bgBlock = sm; cam.bgB = B;
+  return sm;
 }
+function background(cam){ cam.bgB = 200; cam.bgBlock = bgBlocks(cam.env, cam.n); cam.bgLo = cam.envLo ? bgBlocks(cam.envLo, cam.n) : null; }
+const clamp01 = x => Math.max(0, Math.min(1, x));
+// 타구 후보마다 '라켓에 맞는 소리 같은 정도'(q: 0~1)를 매긴다
+//  - 감쇠: 라켓 타구음은 40~80ms 안에 확 사라짐. 목소리·신발 소리는 길게 끈다.
+//  - 밝기: 타구음은 고음이 크게 튄다. 공이 바닥에 튀는 소리·발소리는 저음 위주.
 function detect(cam, sens){
   if (!cam.bgBlock) background(cam);
-  const { env, n, hopSec, t0, bgBlock, bgB } = cam;
+  const { env, envLo, n, hopSec, t0, bgBlock, bgLo, bgB } = cam;
   const rise = 22 - sens*1.6, lvl = rise + 3;
   const c = [];
-  for (let i = 6; i < n-4; i++) {
+  for (let i = 6; i < n-20; i++) {
     const pre = Math.max(env[i-6], env[i-5], env[i-4], env[i-3]);
     const r = env[i] - pre; if (r < rise) continue;
-    const pk = Math.max(env[i], env[i+1], env[i+2], env[i+3]);
-    const s = pk - bgBlock[Math.floor(i/bgB)]; if (s < lvl) continue;
+    let ip = i; for (let j = i+1; j <= i+3; j++) if (env[j] > env[ip]) ip = j;
+    const b = Math.floor(i/bgB), s = env[ip] - bgBlock[b]; if (s < lvl) continue;
+    let tail = 0; for (let j = ip+8; j <= ip+16; j++) tail += env[j]; tail /= 9;
+    const decay = env[ip] - tail;
+    let bright = 6;
+    if (envLo && bgLo) { const lo = Math.max(envLo[i], envLo[i+1], envLo[i+2], envLo[i+3]) - bgLo[b]; bright = s - lo; }
+    const q = 0.6*clamp01((decay - 4)/14) + 0.4*clamp01((bright + 4)/16);
     const last = c[c.length-1];
-    if (last && i - last.i <= 12) { if (s > last.s) last.s = s; continue; }
-    c.push({ i, s });
+    if (last && i - last.i <= 12) { if (s > last.s) { last.s = s; last.q = Math.max(last.q, q); } continue; }
+    c.push({ i, s, q, decay });
   }
   const out = [];
   for (const h of c) {
+    if (h.decay < 2) continue; // 길게 끄는 소리는 타구가 아님
     const t = t0 + h.i*hopSec, prev = out[out.length-1];
-    if (prev && t - prev.t < 0.25) { if (h.s > prev.s) { prev.t = t; prev.s = h.s; } continue; }
-    out.push({ t, s: h.s });
+    if (prev && t - prev.t < 0.25) { if (h.s > prev.s) { prev.t = t; prev.s = h.s; prev.q = h.q; } continue; }
+    out.push({ t, s: h.s, q: h.q });
   }
   return out;
 }
@@ -679,7 +663,7 @@ function buildEvents(){
   if (!B || !A) {
     const k = A ? 'A' : 'B', o = k === 'A' ? 'B' : 'A', c = cams[k];
     const cut = splitByLoudness(c.hits); split = cut !== null;
-    events = c.hits.map(h => ({ t: h.t, who: split ? (h.s >= cut ? k : o) : null }));
+    events = c.hits.map(h => ({ t: h.t, q: h.q, who: split ? (h.s >= cut ? k : o) : null }));
     return;
   }
   split = true;
@@ -691,15 +675,15 @@ function buildEvents(){
     while (j < hb.length && hb[j].t < target - win) j++;
     let bi = -1;
     for (let k = j; k < hb.length && hb[k].t <= target + win; k++) if (!used[k] && (bi < 0 || Math.abs(hb[k].t-target) < Math.abs(hb[bi].t-target))) bi = k;
-    if (bi < 0) { ev.push({ t: a.t, who: 'A' }); continue; }
+    if (bi < 0) { ev.push({ t: a.t, who: 'A', q: a.q, m: 0 }); continue; }
     used[bi] = 1; matched++;
     const b = hb[bi], delta = b.t - target;
     let who;
     if (d) who = delta > 0.012 ? 'A' : delta < -0.012 ? 'B' : (a.s >= b.s ? 'A' : 'B');
     else who = a.s >= b.s ? 'A' : 'B';
-    ev.push({ t: who === 'A' ? a.t : b.t - off, who });
+    ev.push({ t: who === 'A' ? a.t : b.t - off, who, q: Math.max(a.q, b.q), m: 1 });
   }
-  hb.forEach((b, i) => { if (!used[i]) ev.push({ t: b.t - off, who: 'B' }); });
+  hb.forEach((b, i) => { if (!used[i]) ev.push({ t: b.t - off, who: 'B', q: b.q, m: 0 }); });
   ev.sort((x,y) => x.t - y.t);
   events = [];
   for (const e of ev) { const p = events[events.length-1]; if (p && e.t - p.t < 0.12) continue; events.push(e); }
@@ -720,16 +704,37 @@ function splitByLoudness(hits){
   if (m2 - m1 < 5 || lo < v.length*0.15 || hi < v.length*0.15) return null;
   return cut;
 }
+// 랠리 신뢰도(0~1): 타구 간격이 랠리답고(0.6~3.5초), 타구음다운 소리이며,
+// 두 카메라 모두에서 들렸거나(2대) 가까운/먼 소리가 번갈아 나는지(1대)
+function rallyScore(g){
+  const n = g.length; let ok = 0, alt = 0;
+  for (let i = 1; i < n; i++) {
+    const dt = g[i].t - g[i-1].t; if (dt >= 0.6 && dt <= 3.5) ok++;
+    if (g[i].who && g[i-1].who && g[i].who !== g[i-1].who) alt++;
+  }
+  const okF = n > 1 ? ok/(n-1) : 0, altF = n > 1 ? alt/(n-1) : 0;
+  const q = g.reduce((a, e) => a + (e.q ?? 0.5), 0)/n;
+  const third = cams.A && cams.B ? g.reduce((a, e) => a + (e.m ? 1 : 0), 0)/n : split ? altF : q;
+  return Math.min(1, 0.35*okF + 0.35*q + 0.3*third + Math.min(0.1, Math.max(0, n - 3)*0.025));
+}
+const STRICT = [0.25, 0.35, 0.45, 0.55, 0.65];
+let showWeak = false, weakCount = 0;
 function buildRallies(){
+  const thr = STRICT[P.strict - 1];
   const groups = []; let cur = null;
   for (const e of events) {
     if (cur && e.t - cur[cur.length-1].t <= P.gap) cur.push(e); else { cur = [e]; groups.push(cur); }
   }
-  let rs = groups.filter(g => g.length >= P.minHits).map(g => ({ s: g[0].t - P.pre, e: g[g.length-1].t + P.post, hits: g.length, a: g.filter(x => x.who === 'A').length, b: g.filter(x => x.who === 'B').length, on: true }));
+  let rs = groups.filter(g => g.length >= P.minHits).map(g => {
+    const score = rallyScore(g);
+    return { s: g[0].t - P.pre, e: g[g.length-1].t + P.post, hits: g.length, a: g.filter(x => x.who === 'A').length, b: g.filter(x => x.who === 'B').length, score, weak: score < thr };
+  });
+  weakCount = rs.filter(r => r.weak).length;
+  if (!showWeak) rs = rs.filter(r => !r.weak);
   const m = [];
-  for (const r of rs) { const p = m[m.length-1]; if (p && r.s <= p.e) { p.e = Math.max(p.e, r.e); p.hits += r.hits; p.a += r.a; p.b += r.b; } else m.push(r); }
+  for (const r of rs) { const p = m[m.length-1]; if (p && r.s <= p.e) { p.e = Math.max(p.e, r.e); p.hits += r.hits; p.a += r.a; p.b += r.b; p.score = Math.max(p.score, r.score); p.weak = p.weak && r.weak; } else m.push(r); }
   const [lo, hi] = domain();
-  rallies = m.map(r => ({ ...r, s: Math.max(lo, r.s), e: Math.min(hi, r.e) }));
+  rallies = m.map(r => ({ ...r, on: !r.weak, s: Math.max(lo, r.s), e: Math.min(hi, r.e) }));
 }
 function offset(){ return cams.A && cams.B ? sync.off + (+$('nudge').value || 0) : 0; }
 function baseKey(){ return cams.A ? 'A' : 'B'; }
@@ -756,7 +761,6 @@ $('analyze').addEventListener('click', async () => {
     }
     recompute(true);
     setupPlayers();
-    if (typeof swings !== 'undefined') { swings = []; picked.length = 0; $('poseResults').hidden = true; $('poseStatus').textContent = ''; }
     $('emptyState').hidden = true; $('results').hidden = false;
     const took = ['A','B'].filter(k => cams[k]).map(k => `${nm(k)} ${cams[k].secs.toFixed(0)}초`).join(', ');
     $('status').textContent = `분석 완료 (${took})`; clearTrace();
@@ -772,7 +776,7 @@ function recompute(resync){
 }
 
 /* ---------- 설정 ---------- */
-const ctrlMap = { sens: ['oSens', v => v], gap: ['oGap', v => v + '초'], pre: ['oPre', v => v + '초'], post: ['oPost', v => v + '초'], minHits: ['oMin', v => v + '번'] };
+const ctrlMap = { sens: ['oSens', v => v], strict: ['oStrict', v => ['느슨', '조금 느슨', '보통', '조금 엄격', '엄격'][v-1]], gap: ['oGap', v => v + '초'], pre: ['oPre', v => v + '초'], post: ['oPost', v => v + '초'], minHits: ['oMin', v => v + '번'] };
 for (const [id, [o, f]] of Object.entries(ctrlMap)) {
   const el = $(id); $(o).textContent = f(el.value);
   el.addEventListener('input', () => { P[id] = +el.value; $(o).textContent = f(el.value); });
@@ -791,7 +795,8 @@ function renderScore(){
   $('sA').textContent = split ? events.filter(e => e.who === 'A').length : events.length;
   $('sB').textContent = split ? events.filter(e => e.who === 'B').length : '–';
   $('legBwrap').hidden = !split;
-  if (!two) $('singleNote').textContent = split ? `카메라 1대: 소리 크기로 가까운 쪽(${nm(baseKey())})과 먼 쪽을 구분했어요. 이름 칸에 상대 이름을 적으면 표시가 바뀌어요.` : '카메라 1대: 내 타구와 상대 타구의 소리 크기 차이가 작아서 구분하지 않았어요.';
+  if (!two) $('singleNote').textContent = split ? '소리 크기로 카메라에 가까운 쪽과 먼 쪽 타구를 구분했어요.' : '가까운 쪽과 먼 쪽 타구의 소리 크기 차이가 작아서 따로 구분하지 않았어요.';
+  if (!two) { $('swA').hidden = !split; updateLabelsLite(); }
   $('singleNote').hidden = two;
   $('syncRow').hidden = !two;
   if (two) {
@@ -834,7 +839,9 @@ $('tl').addEventListener('click', ev => {
 
 function renderList(){
   const L = $('list'); L.innerHTML = '';
-  if (!rallies.length) { L.innerHTML = '<div class="rally"><span></span><span></span><span class="t">감지된 랠리가 없어요. 감지 설정에서 감도를 올려보세요.</span></div>'; return; }
+  $('weakBtn').hidden = !weakCount;
+  $('weakBtn').textContent = showWeak ? '애매한 구간 숨기기' : `애매한 구간 ${weakCount}개 보기`;
+  if (!rallies.length) { L.innerHTML = '<div class="rally"><span></span><span></span><span class="t">감지된 랠리가 없어요. 감지 설정에서 타구음 감도를 올리거나 "애매한 구간 보기"를 눌러보세요.</span></div>'; return; }
   const two = split;
   rallies.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'rally' + (r.on ? '' : ' off');
@@ -844,14 +851,20 @@ function renderList(){
     const t = document.createElement('label'); t.className = 't'; t.htmlFor = cb.id;
     t.innerHTML = `${fmt(r.s)} – ${fmt(r.e)}<small>${(r.e - r.s).toFixed(0)}초 · 타구 ${r.hits}번</small>`;
     const chips = document.createElement('span'); chips.className = 'chips';
-    if (two) chips.innerHTML = `<span class="chip pa">${esc(nm('A'))} ${r.a}</span><span class="chip pb">${esc(nm('B'))} ${r.b}</span>`;
+    const thr = STRICT[P.strict - 1];
+    const conf = r.weak ? ['애매', 'cw'] : r.score >= thr + 0.2 ? ['확실', 'cs'] : ['보통', 'cm'];
+    chips.innerHTML = `<span class="chip ${conf[1]}" title="랠리 신뢰도 ${Math.round(r.score*100)}점">${conf[0]}</span>` +
+      (two ? `<span class="chip pa">${esc(nm('A'))} ${r.a}</span><span class="chip pb">${esc(nm('B'))} ${r.b}</span>` : '');
     const pb = document.createElement('button'); pb.textContent = '▶'; pb.setAttribute('aria-label', `랠리 ${i+1} 재생`);
     pb.addEventListener('click', () => playQueue([i]));
     row.append(cb, no, t, chips, pb); L.append(row);
   });
   $('toggleAll').textContent = rallies.every(r => r.on) ? '모두 해제' : '모두 선택';
+  $('weakBtn').hidden = !weakCount;
+  $('weakBtn').textContent = showWeak ? '애매한 구간 숨기기' : `애매한 구간 ${weakCount}개 보기`;
 }
 function esc(s){ return s.replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+$('weakBtn').addEventListener('click', () => { showWeak = !showWeak; buildRallies(); renderAll(); });
 $('toggleAll').addEventListener('click', () => { const all = rallies.every(r => r.on); rallies.forEach(r => r.on = !all); renderAll(); });
 
 /* ---------- 플레이어 ---------- */
@@ -867,8 +880,7 @@ function setupPlayers(){
   const two = cams.A && cams.B;
   $('viewSeg').hidden = !two;
   $('expB').hidden = !cams.B; $('expA').hidden = !cams.A;
-  $('swA').hidden = !cams.A; $('swB').hidden = !cams.B;
-  $('handRowA').hidden = !cams.A; $('handRowB').hidden = !cams.B;
+  $('swA').hidden = !cams.A || !split; $('swB').hidden = true;
   setView(two ? 'both' : baseKey());
   updateLabels();
 }
@@ -1045,253 +1057,6 @@ function addFile(name, blob, secs){
   row.append(s, b); $('files').prepend(row); made.push(blob);
 }
 
-/* ================= 자세 분석 ================= */
-const MP_VER = '1.0.1';
-const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
-const MODEL = { lite: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
-                full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task' };
-const hands = { A: 'R', B: 'R' };
-let modelKind = 'lite', srate = 0.5, showSkel = true, flt = 'all';
-let swings = [], poseCancelled = false;
-
-function segToggle(segId, onPick){
-  $(segId).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
-    for (const x of $(segId).querySelectorAll('button')) x.setAttribute('aria-pressed', x === b);
-    onPick(b); });
-}
-for (const k of ['A','B']) segToggle('handRow' + k, b => { hands[k] = b.dataset.h; swings.forEach(s => { if (s.k === k) computeMetrics(s); }); renderPose(); });
-segToggle('modelSeg', b => { modelKind = b.dataset.m; poseP = null; });
-segToggle('rateSeg', b => { srate = +b.dataset.r; sv.playbackRate = srate; });
-segToggle('fltSeg', b => { flt = b.dataset.f; renderCards(); });
-$('skel').addEventListener('click', () => { showSkel = !showSkel; $('skel').setAttribute('aria-pressed', showSkel); $('skel').textContent = showSkel ? '관절선 끄기' : '관절선 켜기'; drawOverlay(); });
-
-let poseP = null;
-function getPose(){
-  if (!poseP) poseP = (async () => {
-    let mod;
-    try { mod = await import(MP_URL); } catch (e) { throw new Error('관절 인식 프로그램을 받아오지 못했어요. 인터넷 연결을 확인해 주세요. Claude 페이지에서는 막혀 있을 수 있으니 GitHub 버전에서 써주세요.'); }
-    const { FilesetResolver, PoseLandmarker } = mod;
-    const fileset = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
-    const opts = d => ({ baseOptions: { modelAssetPath: MODEL[modelKind], delegate: d }, runningMode: 'VIDEO', numPoses: 2, minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.4 });
-    try { return await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
-    catch (e) {
-      console.warn('GPU 실패, CPU로', e);
-      try { return await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
-      catch (e2) { throw new Error('관절 인식 모델을 불러오지 못했어요. Claude 페이지에서는 모델 다운로드가 막혀 있어요. GitHub 버전에서 써주세요.'); }
-    }
-  })().catch(e => { poseP = null; throw e; });
-  return poseP;
-}
-
-function ownHits(k){
-  const on = rallies.filter(r => r.on), list = [];
-  for (const e of events) {
-    if (split ? e.who !== k : baseKey() !== k) continue;
-    if (!on.some(r => e.t >= r.s && e.t <= r.e)) continue;
-    const t = camTime(k, e.t);
-    if (t < 0.2 || t > cams[k].duration - 0.2) continue;
-    if (list.length && t - list[list.length-1] < 0.8) continue;
-    list.push(t);
-  }
-  return list;
-}
-function poseCams(){ return cams.A && cams.B ? ['A','B'] : [baseKey()]; }
-
-$('poseCancel').addEventListener('click', () => { poseCancelled = true; $('poseStatus').textContent = '멈추는 중…'; });
-$('poseGo').addEventListener('click', async () => {
-  const ks = poseCams(), jobs = ks.map(k => ({ k, hits: ownHits(k) })), total = jobs.reduce((s, j) => s + j.hits.length, 0);
-  if (!total) { $('poseStatus').textContent = '체크된 랠리 안에 분석할 타구가 없어요.'; return; }
-  $('poseGo').disabled = true; $('poseCancel').hidden = false; poseCancelled = false;
-  swings = []; picked.length = 0;
-  const bar = $('poseProg'); bar.style.width = '0';
-  try {
-    $('poseStatus').textContent = '관절 인식 모델 준비 중… (처음엔 조금 걸려요)';
-    const pose = await getPose();
-    const M = await mb();
-    $('poseResults').hidden = false;
-    let done = 0, mpTs = 0;
-    for (const { k, hits } of jobs) {
-      const sink = new M.CanvasSink(cams[k].vTrack, { width: 640, poolSize: 2 });
-      for (const hit of hits) {
-        if (poseCancelled) break;
-        const ts = [];
-        for (let t = Math.max(0, hit - 1.0); t <= Math.min(cams[k].duration - 0.02, hit + 0.5); t += 1/30) ts.push(t);
-        const sw = { k, hit, frames: [], thumb: null };
-        let prevC = null, best = null;
-        for await (const wc of sink.canvasesAtTimestamps(ts)) {
-          if (!wc) continue;
-          mpTs += 33;
-          const res = pose.detectForVideo(wc.canvas, mpTs);
-          const L = res.landmarks || res.poseLandmarks || [], W = res.worldLandmarks || res.poseWorldLandmarks || [];
-          const pi = pickPerson(L, prevC);
-          const fr = { t: wc.timestamp, lm: null, w: null };
-          if (pi >= 0) { fr.lm = L[pi].map(p => [p.x, p.y, p.visibility ?? 1]); fr.w = W[pi] ? W[pi].map(p => [p.x, p.y, p.z]) : null; prevC = center(fr.lm); }
-          sw.frames.push(fr);
-          if (!best || Math.abs(wc.timestamp - hit) < Math.abs(best.t - hit)) { best = fr; sw.thumb = makeThumb(wc.canvas, fr.lm); }
-          if (res.close) res.close();
-        }
-        mpTs += 2000;
-        computeMetrics(sw); swings.push(sw); done++; trace(`자세 분석 ${done}/${total}`);
-        bar.style.width = (done/total*100).toFixed(1) + '%';
-        $('poseStatus').textContent = `${nm(k)} 스윙 분석 중… ${done}/${total}`;
-        if (done % 3 === 0) renderPose();
-      }
-    }
-    renderPose(); clearTrace();
-    $('poseStatus').textContent = poseCancelled ? `멈춤 · 스윙 ${swings.length}개 분석됨` : `완료 · 스윙 ${swings.length}개`;
-  } catch (e) {
-    console.error(e); report(e, '자세 분석'); $('poseStatus').textContent = '자세 분석 실패: ' + (e.message || e);
-  } finally { $('poseGo').disabled = false; $('poseCancel').hidden = true; }
-});
-
-function center(lm){ const v = lm.filter(p => p[2] > 0.4); if (!v.length) return null; return [v.reduce((s,p) => s + p[0], 0)/v.length, v.reduce((s,p) => s + p[1], 0)/v.length]; }
-function pickPerson(L, prevC){
-  let bi = -1, bs = -1;
-  L.forEach((lm, i) => {
-    const v = lm.filter(p => (p.visibility ?? 1) > 0.4); if (v.length < 8) return;
-    const xs = v.map(p => p.x), ys = v.map(p => p.y);
-    let sc = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
-    if (prevC) { const cx = xs.reduce((a,b) => a+b, 0)/xs.length, cy = ys.reduce((a,b) => a+b, 0)/ys.length; sc /= 1 + 8*Math.hypot(cx - prevC[0], cy - prevC[1]); }
-    if (sc > bs) { bs = sc; bi = i; }
-  });
-  return bi;
-}
-
-const deg = r => r*180/Math.PI;
-function ang3(a, b, c){ const u = [a[0]-b[0], a[1]-b[1], a[2]-b[2]], v = [c[0]-b[0], c[1]-b[1], c[2]-b[2]]; const n = Math.hypot(...u)*Math.hypot(...v); return n ? deg(Math.acos(Math.max(-1, Math.min(1, (u[0]*v[0] + u[1]*v[1] + u[2]*v[2])/n)))) : NaN; }
-function yaw(l, r){ return deg(Math.atan2(r[2] - l[2], r[0] - l[0])); }
-function wrapD(d){ while (d > 180) d -= 360; while (d < -180) d += 360; return d; }
-const mean = a => { const v = a.filter(Number.isFinite); return v.length ? v.reduce((s,x) => s + x, 0)/v.length : NaN; };
-
-function computeMetrics(sw){
-  const F = sw.frames.filter(f => f.lm && f.w);
-  sw.m = { type: 'un', height: NaN, elbow: NaN, knee: NaN, rot: NaN, sep: NaN };
-  if (F.length < 5) return;
-  let I = 0; F.forEach((f, i) => { if (Math.abs(f.t - sw.hit) < Math.abs(F[I].t - sw.hit)) I = i; });
-  const fi = F[I], lm = fi.lm, w = fi.w;
-  const sp = idx => { let s = 0; for (let j = Math.max(1, I - 4); j <= I; j++) s += Math.hypot(F[j].lm[idx][0] - F[j-1].lm[idx][0], F[j].lm[idx][1] - F[j-1].lm[idx][1]); return s; };
-  const R = sp(16) >= sp(15);
-  const SH = R ? 12 : 11, EL = R ? 14 : 13, WR = R ? 16 : 15;
-  const cx = (lm[11][0] + lm[12][0])/2, wx = lm[WR][0], wy = lm[WR][1];
-  let type;
-  if (wy < lm[0][1] - 0.02) type = 'ov';
-  else { const right = wx > cx; type = (hands[sw.k] === 'R') === right ? 'fh' : 'bh'; }
-  const hipY = (lm[23][1] + lm[24][1])/2, shY = (lm[11][1] + lm[12][1])/2;
-  const height = (hipY - wy)/(hipY - shY);
-  const elbow = ang3(w[SH], w[EL], w[WR]);
-  const pre = F.filter(f => f.t >= sw.hit - 1.0 && f.t <= sw.hit);
-  const kv = pre.map(f => (ang3(f.w[23], f.w[25], f.w[27]) + ang3(f.w[24], f.w[26], f.w[28]))/2).filter(Number.isFinite);
-  const win = F.filter(f => f.t >= sw.hit - 1.0 && f.t <= sw.hit + 0.3);
-  let sy = win.map(f => yaw(f.w[11], f.w[12])), hy = win.map(f => yaw(f.w[23], f.w[24]));
-  const unwrap = a => { for (let i = 1; i < a.length; i++) a[i] = a[i-1] + wrapD(a[i] - a[i-1]); return a; };
-  sy = unwrap(sy); hy = unwrap(hy);
-  sw.m = { type, height, elbow, knee: kv.length ? Math.min(...kv) : NaN,
-    rot: sy.length ? Math.max(...sy) - Math.min(...sy) : NaN,
-    sep: sy.length ? Math.max(...sy.map((s, i) => Math.abs(wrapD(s - hy[i])))) : NaN, racket: WR };
-}
-
-const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]];
-function drawSkel(g, lm, ox, oy, w, h, racket){
-  if (!lm) return;
-  const P = i => [ox + lm[i][0]*w, oy + lm[i][1]*h];
-  g.lineCap = 'round';
-  for (const [a, b] of BONES) {
-    if (lm[a][2] < 0.3 || lm[b][2] < 0.3) continue;
-    const hot = racket && [racket, racket - 2].some(x => x === a || x === b);
-    g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 6; g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke();
-    g.strokeStyle = hot ? css('--ball') : '#ffffff'; g.lineWidth = 3; g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke();
-  }
-  for (const i of [11,12,13,14,15,16,23,24,25,26,27,28]) { if (lm[i][2] < 0.3) continue; g.fillStyle = '#fff'; g.beginPath(); g.arc(...P(i), 3.5, 0, Math.PI*2); g.fill(); }
-}
-function makeThumb(src, lm){
-  const c = document.createElement('canvas'), W = 480, H = Math.round(W * src.height / src.width);
-  c.width = W; c.height = H; const g = c.getContext('2d'); g.drawImage(src, 0, 0, W, H);
-  if (lm) drawSkel(g, lm, 0, 0, W, H, null);
-  return c.toDataURL('image/jpeg', 0.82);
-}
-
-const TYPES = { fh: '포핸드', bh: '백핸드', ov: '서브·스매시', un: '알 수 없음' };
-const f0 = x => Number.isFinite(x) ? `${x.toFixed(0)}°` : '–';
-const pct = x => Number.isFinite(x) ? `${Math.round(x*100)}%` : '–';
-const ROWS = [['타점 높이', s => pct(s.m.height), s => s.m.height*100],
-              ['팔꿈치 각도', s => f0(s.m.elbow), s => s.m.elbow],
-              ['무릎 최저 각도', s => f0(s.m.knee), s => s.m.knee],
-              ['어깨 회전량', s => f0(s.m.rot), s => s.m.rot],
-              ['어깨-골반 꼬임', s => f0(s.m.sep), s => s.m.sep]];
-const picked = [];
-function renderPose(){ renderSummary(); renderCards(); renderCompare(); $('fltSeg').hidden = !(cams.A && cams.B); }
-function renderSummary(){
-  let h = '<tr><th>선수 · 종류</th><th>횟수</th>' + ROWS.map(r => `<th>${r[0]}</th>`).join('') + '</tr>';
-  for (const k of ['A','B']) for (const ty of ['fh','bh','ov','un']) {
-    const g = swings.filter(s => s.k === k && s.m.type === ty); if (!g.length) continue;
-    h += `<tr><td>${esc(nm(k))} <span class="type t-${ty}">${TYPES[ty]}</span></td><td><b>${g.length}</b></td>` +
-      ROWS.map((r, ri) => { const v = mean(g.map(r[2])); return `<td>${ri === 0 ? pct(v/100) : f0(v)}</td>`; }).join('') + '</tr>';
-  }
-  $('sumTable').innerHTML = h;
-}
-function renderCards(){
-  const C = $('cards'); C.innerHTML = '';
-  swings.forEach((s, idx) => {
-    if (flt !== 'all' && s.k !== flt) return;
-    const card = document.createElement('article'); card.className = 'card' + (picked.includes(idx) ? ' sel' : ''); card.dataset.k = s.k;
-    const img = document.createElement('img'); img.alt = `스윙 ${idx+1} 임팩트 순간`; if (s.thumb) img.src = s.thumb;
-    const body = document.createElement('div'); body.className = 'body';
-    body.innerHTML = `<div class="ttl"><b>#${idx+1}</b><span>${esc(nm(s.k))}</span><span class="type t-${s.m.type}">${TYPES[s.m.type]}</span><span>${fmt(s.hit)}</span></div>
-      <dl class="kv">${ROWS.map(r => `<dt>${r[0]}</dt><dd>${r[1](s)}</dd>`).join('')}</dl>`;
-    const row = document.createElement('div'); row.className = 'row';
-    const pb = document.createElement('button'); pb.className = 'primary'; pb.textContent = '보기'; pb.addEventListener('click', () => playSwing(idx));
-    const cb = document.createElement('button'); cb.textContent = picked.includes(idx) ? '비교 해제' : '비교'; cb.setAttribute('aria-pressed', picked.includes(idx));
-    cb.addEventListener('click', () => { const p = picked.indexOf(idx); if (p >= 0) picked.splice(p, 1); else { picked.push(idx); if (picked.length > 2) picked.shift(); } renderCards(); renderCompare(); });
-    row.append(pb, cb); body.append(row); card.append(img, body); C.append(card);
-  });
-}
-function renderCompare(){
-  const P = $('compare');
-  if (picked.length < 2) { P.hidden = true; return; }
-  const [a, b] = picked.map(i => swings[i]);
-  P.hidden = false;
-  const cap = (i, s) => `#${i+1} ${esc(nm(s.k))} ${TYPES[s.m.type]} · ${fmt(s.hit)}`;
-  P.innerHTML = `<div class="cmpgrid">
-    <figure><img src="${a.thumb}" alt="스윙 ${picked[0]+1}"><figcaption>${cap(picked[0], a)}</figcaption></figure>
-    <figure><img src="${b.thumb}" alt="스윙 ${picked[1]+1}"><figcaption>${cap(picked[1], b)}</figcaption></figure></div>
-    <div class="tablewrap"><table><tr><th>항목</th><th>#${picked[0]+1}</th><th>#${picked[1]+1}</th><th>차이</th></tr>
-    ${ROWS.map(r => { const d = r[2](b) - r[2](a); return `<tr><td>${r[0]}</td><td>${r[1](a)}</td><td>${r[1](b)}</td><td>${Number.isFinite(d) ? (d > 0 ? '+' : '') + d.toFixed(0) + (r[0] === '타점 높이' ? '%p' : '°') : '–'}</td></tr>`; }).join('')}
-    </table></div>`;
-}
-
-const sv = $('sv'), sov = $('sov');
-let scur = -1, sraf = 0;
-function playSwing(idx){
-  scur = idx; const s = swings[idx];
-  if (!urls[s.k]) urls[s.k] = URL.createObjectURL(files[s.k]);
-  const go = () => { sv.playbackRate = srate; sv.currentTime = Math.max(0, s.hit - 1.0); sv.play().catch(() => {}); cancelAnimationFrame(sraf); sloop(); };
-  if (sv.dataset.k !== s.k) { sv.dataset.k = s.k; sv.src = urls[s.k]; sv.addEventListener('loadedmetadata', go, { once: true }); sv.load(); } else go();
-  $('snow').textContent = `#${idx+1} ${nm(s.k)} ${TYPES[s.m.type]} · ${fmt(s.hit)}`;
-  sv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-$('replay').addEventListener('click', () => { if (scur >= 0) playSwing(scur); });
-function sloop(){
-  drawOverlay();
-  const s = swings[scur];
-  if (s && sv.currentTime >= s.hit + 0.5) { sv.pause(); drawOverlay(); return; }
-  sraf = requestAnimationFrame(sloop);
-}
-sv.addEventListener('seeked', drawOverlay);
-function drawOverlay(){
-  const r = sov.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-  if (!r.width) return;
-  sov.width = r.width*dpr; sov.height = r.height*dpr; const g = sov.getContext('2d'); g.scale(dpr, dpr);
-  g.clearRect(0, 0, r.width, r.height);
-  const s = swings[scur]; if (!s || !showSkel || !sv.videoWidth) return;
-  const t = sv.currentTime; let best = null;
-  for (const f of s.frames) if (!best || Math.abs(f.t - t) < Math.abs(best.t - t)) best = f;
-  if (!best || Math.abs(best.t - t) > 0.06 || !best.lm) return;
-  const va = sv.videoWidth/sv.videoHeight, ra = r.width/r.height;
-  const w = va > ra ? r.width : r.height*va, h = va > ra ? r.width/va : r.height;
-  drawSkel(g, best.lm, (r.width - w)/2, (r.height - h)/2, w, h, s.m.racket);
-  if (Math.abs(t - s.hit) < 0.05) { g.fillStyle = css('--ball'); g.font = '600 15px "Barlow Condensed", sans-serif'; g.fillText('IMPACT', 10, 22); }
-}
-window.addEventListener('resize', drawOverlay);
 
 </script>
 
