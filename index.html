@@ -129,6 +129,7 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
 .cmpgrid figcaption{font-size:.85rem;color:var(--muted)}
 .handrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.88rem}
 .handrow .badge{--c:var(--pa)} #handRowB .badge{--c:var(--pb)}
+.peek{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px;display:block;max-width:100%}
 .file.ok{color:var(--ink)} .file.bad{color:var(--warn)}
 #diag pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;margin:0;color:var(--muted);max-height:240px;overflow:auto}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -147,12 +148,14 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
         <div class="slot" data-k="A">
           <div class="slot-head"><span class="badge">A</span><input type="text" id="nameA" value="A" aria-label="A 선수 이름"></div>
           <label class="btn pick">A 뒤 카메라 영상 고르기<input type="file" id="fileA" accept="video/*,.mov,.mp4"></label>
+          <video class="peek" id="peekA" playsinline muted preload="metadata" hidden></video>
           <div class="file" id="infoA">아직 없음</div>
           <div class="bar"><i id="progA"></i></div>
         </div>
         <div class="slot" data-k="B">
           <div class="slot-head"><span class="badge">B</span><input type="text" id="nameB" value="B" aria-label="B 선수 이름"></div>
           <label class="btn pick">B 뒤 카메라 영상 고르기<input type="file" id="fileB" accept="video/*,.mov,.mp4"></label>
+          <video class="peek" id="peekB" playsinline muted preload="metadata" hidden></video>
           <div class="file" id="infoB">선택 사항 (한 대만 찍었으면 비워두세요)</div>
           <div class="bar"><i id="progB"></i></div>
         </div>
@@ -317,20 +320,54 @@ let sync = null, events = [], rallies = [], view = 'both', split = false;
 
 /* ---------- 파일 선택 ---------- */
 const probing = { A: null, B: null };
+const pending = { A: false, B: false };
+// change 이벤트가 오지 않아도(iOS에서 긴 영상 변환 후 종종 발생) 화면으로 돌아왔을 때 직접 확인
+function handlePick(k){
+  const f = $('file'+k).files && $('file'+k).files[0];
+  if (!f || f === files[k]) return false;
+  pending[k] = false;
+  files[k] = f; meta[k] = null;
+  $('prog'+k).style.width = '0';
+  showPeek(k, f);
+  probing[k] = probe(k, f);
+  refreshAnalyzeBtn();
+  return true;
+}
+const peekUrls = {};
+function showPeek(k, f){
+  const v = $('peek'+k);
+  if (peekUrls[k]) URL.revokeObjectURL(peekUrls[k]);
+  peekUrls[k] = URL.createObjectURL(f);
+  v.onloadedmetadata = () => { try { v.currentTime = Math.min(1, v.duration/2 || 0); } catch {} };
+  v.onerror = () => { v.hidden = true; };
+  v.src = peekUrls[k]; v.hidden = false;
+}
+function checkReturn(){
+  for (const k of ['A','B']) {
+    if (!pending[k]) continue;
+    setTimeout(() => {
+      if (handlePick(k) || !pending[k]) return;
+      setTimeout(() => {
+        if (handlePick(k) || !pending[k]) return;
+        pending[k] = false;
+        setInfo(k, '영상이 이 페이지로 넘어오지 않았어요. 사진 보관함의 긴 영상은 iPhone이 변환 후 넘겨주지 못하는 경우가 있어요. 사진 앱에서 영상 → 공유 → "파일에 저장"을 한 뒤, 영상 고르기 → "파일 선택"으로 골라 주세요.', 'bad');
+        report('선택 창은 닫혔지만 파일이 전달되지 않음', `${k} 영상 고르기`);
+      }, 4000);
+    }, 800);
+  }
+}
 for (const k of ['A','B']) {
   $('file'+k).addEventListener('click', () => {
+    pending[k] = true;
     setInfo(k, '영상을 고르는 중… 사진 보관함에서 골랐다면 iPhone이 변환하는 동안 잠시 기다려 주세요.');
   });
-  $('file'+k).addEventListener('cancel', () => setInfo(k, files[k] ? infoText(k) : '아직 없음'));
-  $('file'+k).addEventListener('change', e => {
-    const f = e.target.files[0]; if (!f) { setInfo(k, files[k] ? infoText(k) : '아직 없음'); return; }
-    files[k] = f; meta[k] = null;
-    $('prog'+k).style.width = '0';
-    probing[k] = probe(k, f);
-    refreshAnalyzeBtn();
-  });
+  $('file'+k).addEventListener('cancel', () => { pending[k] = false; setInfo(k, files[k] ? infoText(k) : '아직 없음'); });
+  $('file'+k).addEventListener('change', () => { if (!handlePick(k) && !files[k]) checkReturn(); });
+  $('file'+k).addEventListener('input', () => handlePick(k));
   $('name'+k).addEventListener('input', updateLabels);
 }
+window.addEventListener('focus', checkReturn);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReturn(); });
 const meta = { A: null, B: null };
 function setInfo(k, text, cls){ const el = $('info'+k); el.textContent = text; el.className = 'file' + (cls ? ' ' + cls : ''); }
 function infoText(k){
