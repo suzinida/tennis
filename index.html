@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="랠리컷">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>랠리컷</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column like a courtside clipboard — inputs, scoreboard summary, timeline strip, player, rally list, export */
+:root{
+  --bg:#EEF2EC; --surface:#FFFFFF; --sunk:#E3E9E2; --ink:#14221D; --muted:#5A6A62; --line:#D2DACF;
+  --court:#1D5C4F; --court-ink:#FFFFFF; --pa:#2B5FB4; --pb:#CC5A22; --ball:#C9D62F; --warn:#A8471A;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1614; --surface:#16211E; --sunk:#1D2A26; --ink:#E4ECE7; --muted:#93A49B; --line:#2A3934;
+  --court:#4DAE97; --court-ink:#0B1311; --pa:#79A3EE; --pb:#EF8A55; --ball:#D8E35A; --warn:#F09A6C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1614; --surface:#16211E; --sunk:#1D2A26; --ink:#E4ECE7; --muted:#93A49B; --line:#2A3934;
+  --court:#4DAE97; --court-ink:#0B1311; --pa:#79A3EE; --pb:#EF8A55; --ball:#D8E35A; --warn:#F09A6C; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:2.4rem;letter-spacing:.01em;margin:0;line-height:1}
+h1 span{color:var(--court)}
+.tag{color:var(--muted);font-size:.85rem}
+h2{font-family:var(--display);font-weight:600;font-size:1.25rem;letter-spacing:.04em;text-transform:uppercase;margin:0;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.slots{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.slots{grid-template-columns:1fr}}
+.slot{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0;border-left:4px solid var(--c)}
+.slot[data-k="A"]{--c:var(--pa)} .slot[data-k="B"]{--c:var(--pb)}
+.slot-head{display:flex;align-items:center;gap:8px}
+.badge{font-family:var(--display);font-weight:700;font-size:1rem;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:var(--surface);flex:none}
+.slot input[type=text]{flex:1;min-width:0;font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:6px 10px}
+.file{font-size:.85rem;color:var(--muted);overflow-wrap:anywhere}
+.pick{position:relative;overflow:hidden}
+.pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button:focus-visible,.pick:focus-within,input:focus-visible{outline:2px solid var(--court);outline-offset:2px}
+button.primary{background:var(--court);border-color:var(--court);color:var(--court-ink)}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hint{color:var(--muted);font-size:.85rem;margin:0}
+.bar{height:6px;background:var(--sunk);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--c,var(--court));transition:width .2s}
+.status{font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.err{color:var(--warn);font-size:.9rem}
+.score{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+@media (max-width:560px){.score{grid-template-columns:repeat(2,1fr)}}
+.score div{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column}
+.score b{font-family:var(--display);font-weight:700;font-size:1.9rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.score small{color:var(--muted);font-size:.78rem;letter-spacing:.04em}
+.pa{color:var(--pa)} .pb{color:var(--pb)}
+#tl{width:100%;height:96px;display:block;border-radius:8px;background:var(--sunk);touch-action:manipulation;cursor:pointer}
+.legend{display:flex;gap:14px;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+details summary{cursor:pointer;font-weight:600}
+.ctrls{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;margin-top:12px}
+@media (max-width:560px){.ctrls{grid-template-columns:1fr}}
+.ctrl label{display:flex;justify-content:space-between;font-size:.88rem}
+.ctrl output{font-family:var(--display);font-weight:600;font-size:1.05rem;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--court)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed=true]{background:var(--court);color:var(--court-ink)}
+.stage{display:grid;gap:8px;grid-template-columns:1fr}
+.stage.both{grid-template-columns:1fr 1fr}
+@media (max-width:560px){.stage.both{grid-template-columns:1fr}}
+.vbox{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:16/9;max-width:100%}
+.vbox video{width:100%;height:100%;object-fit:contain;display:block}
+.vbox .lab{position:absolute;left:8px;top:8px;font-family:var(--display);font-weight:700;font-size:.95rem;padding:1px 8px;border-radius:4px;color:#fff}
+.nowplaying{font-family:var(--display);font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.rally{display:grid;grid-template-columns:auto auto 1fr auto auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line)}
+.rally:first-child{border-top:0}
+.rally.off{opacity:.5}
+.rally .no{font-family:var(--display);font-weight:700;font-size:1.1rem;width:2.2em;font-variant-numeric:tabular-nums}
+.rally .t{font-variant-numeric:tabular-nums;font-size:.9rem;min-width:0}
+.rally .t small{color:var(--muted);display:block;font-size:.78rem}
+.chips{display:flex;gap:4px}
+.chip{font-size:.75rem;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid currentColor;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rally button{padding:6px 10px}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
+.files{display:flex;flex-direction:column;gap:8px}
+.fileitem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;flex-wrap:wrap}
+.fileitem span{font-size:.88rem;overflow-wrap:anywhere;min-width:0}
+.empty{text-align:left;color:var(--muted);font-size:.9rem;padding:14px;border:1px dashed var(--line);border-radius:var(--r)}
+.empty ol{margin:6px 0 0;padding-left:1.2em}
+.sync{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.88rem}
+.sync input{width:7em;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>랠리<span>컷</span></h1>
+    <span class="tag">타구음으로 랠리만 골라내는 테니스 하이라이트 편집기</span>
+  </header>
+
+  <section>
+    <h2>1 · 영상 넣기</h2>
+    <div class="panel">
+      <div class="slots">
+        <div class="slot" data-k="A">
+          <div class="slot-head"><span class="badge">A</span><input type="text" id="nameA" value="A" aria-label="A 선수 이름"></div>
+          <label class="btn pick">A 뒤 카메라 영상 고르기<input type="file" id="fileA" accept="video/*,.mov,.mp4"></label>
+          <div class="file" id="infoA">아직 없음</div>
+          <div class="bar"><i id="progA"></i></div>
+        </div>
+        <div class="slot" data-k="B">
+          <div class="slot-head"><span class="badge">B</span><input type="text" id="nameB" value="B" aria-label="B 선수 이름"></div>
+          <label class="btn pick">B 뒤 카메라 영상 고르기<input type="file" id="fileB" accept="video/*,.mov,.mp4"></label>
+          <div class="file" id="infoB">선택 사항 (한 대만 찍었으면 비워두세요)</div>
+          <div class="bar"><i id="progB"></i></div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="analyze" disabled>분석 시작</button>
+        <span class="status" id="status">영상을 고르면 시작할 수 있어요.</span>
+      </div>
+      <p class="hint">영상은 이 기기 안에서만 처리되고 어디에도 올라가지 않아요. 사진 앱보다 '파일' 앱에서 고르면 iOS의 변환 과정 없이 빨리 열려요.</p>
+    </div>
+  </section>
+
+  <div class="empty" id="emptyState">
+    분석이 끝나면 여기에 결과가 나와요.
+    <ol>
+      <li>두 영상의 타구음을 비교해 시간을 자동으로 맞춥니다.</li>
+      <li>"펑" 소리가 이어지는 구간을 랠리로 묶고, 공 줍는 시간은 뺍니다.</li>
+      <li>소리가 먼저 들린 쪽 카메라로 누가 쳤는지 구분합니다.</li>
+      <li>랠리만 이어서 보거나, 원본 화질 그대로 빠르게 저장합니다.</li>
+    </ol>
+  </div>
+
+  <div id="results" hidden>
+    <section>
+      <h2>2 · 결과</h2>
+      <div class="score">
+        <div><small>랠리</small><b id="sRallies">0</b></div>
+        <div><small>하이라이트 / 원본</small><b id="sLen">0:00</b></div>
+        <div><small id="sAlab">A 타구</small><b class="pa" id="sA">0</b></div>
+        <div><small id="sBlab">B 타구</small><b class="pb" id="sB">0</b></div>
+      </div>
+      <div class="sync" id="syncRow" hidden>
+        <span id="syncInfo"></span>
+        <label for="nudge">보정(초)</label>
+        <input type="number" id="nudge" step="0.01" value="0">
+      </div>
+      <canvas id="tl" aria-label="전체 타임라인. 누르면 해당 랠리를 재생합니다"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--court);opacity:.35"></i>랠리 구간</span>
+        <span><i style="background:var(--pa)"></i><span id="legA">A 타구</span></span>
+        <span id="legBwrap"><i style="background:var(--pb)"></i><span id="legB">B 타구</span></span>
+      </div>
+      <details class="panel">
+        <summary>감지 설정</summary>
+        <div class="ctrls">
+          <div class="ctrl"><label for="sens">타구음 감도 <output id="oSens"></output></label><input type="range" id="sens" min="1" max="10" step="1" value="6"><p class="hint">공 줍는 구간이 섞이면 낮추고, 랠리가 끊기면 올리세요.</p></div>
+          <div class="ctrl"><label for="gap">랠리로 묶는 간격 <output id="oGap"></output></label><input type="range" id="gap" min="2" max="8" step="0.5" value="4"></div>
+          <div class="ctrl"><label for="pre">랠리 앞 여유 <output id="oPre"></output></label><input type="range" id="pre" min="0" max="5" step="0.5" value="1.5"></div>
+          <div class="ctrl"><label for="post">랠리 뒤 여유 <output id="oPost"></output></label><input type="range" id="post" min="0" max="5" step="0.5" value="2"></div>
+          <div class="ctrl"><label for="minHits">최소 타구 수 <output id="oMin"></output></label><input type="range" id="minHits" min="1" max="6" step="1" value="2"></div>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <h2>3 · 보기</h2>
+      <div class="row">
+        <div class="seg" id="viewSeg" role="group" aria-label="화면 선택">
+          <button data-v="A" aria-pressed="false" id="vbA">A</button>
+          <button data-v="B" aria-pressed="false" id="vbB">B</button>
+          <button data-v="both" aria-pressed="true" id="vbBoth">나란히</button>
+        </div>
+        <button class="primary" id="playAll">하이라이트 이어보기</button>
+        <button id="stop">정지</button>
+        <button id="sound">소리 켜기</button>
+      </div>
+      <div class="stage both" id="stage">
+        <div class="vbox" id="boxA"><video id="vA" playsinline muted preload="metadata"></video><span class="lab" style="background:var(--pa)" id="labA">A</span></div>
+        <div class="vbox" id="boxB"><video id="vB" playsinline muted preload="metadata"></video><span class="lab" style="background:var(--pb)" id="labB">B</span></div>
+      </div>
+      <div class="row"><span class="nowplaying" id="now">랠리를 고르거나 이어보기를 누르세요.</span></div>
+      <p class="err" id="vidErr" hidden></p>
+    </section>
+
+    <section>
+      <div class="row" style="justify-content:space-between"><h2>랠리 목록</h2><button id="toggleAll">모두 해제</button></div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section>
+      <h2>4 · 저장</h2>
+      <div class="panel">
+        <p class="hint">체크된 랠리만 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 랠리 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
+        <div class="row">
+          <button class="primary" id="expA">A 하이라이트 만들기</button>
+          <button class="primary" id="expB">B 하이라이트 만들기</button>
+        </div>
+        <div class="bar"><i id="progX"></i></div>
+        <span class="status" id="xStatus"></span>
+        <div class="files" id="files"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+const MB_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.59.0/+esm';
+let MB = null;
+async function mb(){ if(!MB) MB = await import(MB_URL); return MB; }
+
+const $ = id => document.getElementById(id);
+const fmt = s => { s = Math.max(0, s); const m = Math.floor(s/60), ss = Math.floor(s%60); const h = Math.floor(m/60); return h ? `${h}:${String(m%60).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${m}:${String(ss).padStart(2,'0')}`; };
+const PART_LIMIT = 450 * 1024 * 1024;
+
+const cams = { A: null, B: null };
+const files = { A: null, B: null };
+const P = { sens: 6, gap: 4, pre: 1.5, post: 2, minHits: 2 };
+let sync = null, events = [], rallies = [], view = 'both';
+
+/* ---------- 파일 선택 ---------- */
+for (const k of ['A','B']) {
+  $('file'+k).addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    files[k] = f;
+    $('info'+k).textContent = `${f.name} · ${(f.size/1048576).toFixed(0)}MB`;
+    $('prog'+k).style.width = '0';
+    $('analyze').disabled = !files.A && !files.B;
+    $('status').textContent = '준비됐어요. 분석 시작을 누르세요.';
+  });
+  $('name'+k).addEventListener('input', updateLabels);
+}
+function nm(k){ return ($('name'+k).value.trim() || k); }
+function updateLabels(){
+  for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('exp'+k).textContent = `${nm(k)} 하이라이트 만들기`; $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
+  renderList();
+}
+
+/* ---------- 오디오 → 고역 에너지 포락선 ---------- */
+class EnvProc {
+  constructor(sr, t0, durSec){
+    this.sr = sr; this.t0 = t0; this.hop = Math.round(sr*0.005); this.hopSec = this.hop/sr;
+    this.env = new Float32Array(Math.ceil(durSec/this.hopSec) + 400); this.n = 0; this.acc = 0; this.cnt = 0;
+    const f0 = 2000, Q = Math.SQRT1_2, w = 2*Math.PI*f0/sr, c = Math.cos(w), s = Math.sin(w), al = s/(2*Q), a0 = 1+al;
+    this.b0 = (1+c)/2/a0; this.b1 = -(1+c)/a0; this.b2 = this.b0; this.a1 = -2*c/a0; this.a2 = (1-al)/a0;
+    this.x1 = this.x2 = this.y1 = this.y2 = 0;
+  }
+  push(buf){
+    let {b0,b1,b2,a1,a2,x1,x2,y1,y2,acc,cnt,hop} = this;
+    for (let i = 0; i < buf.length; i++) {
+      const x = buf[i]; const y = b0*x + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+      x2 = x1; x1 = x; y2 = y1; y1 = y; acc += y*y;
+      if (++cnt === hop) {
+        if (this.n >= this.env.length) { const g = new Float32Array(this.env.length*2); g.set(this.env); this.env = g; }
+        this.env[this.n++] = 10*Math.log10(acc/hop + 1e-12); acc = 0; cnt = 0;
+      }
+    }
+    Object.assign(this, {x1,x2,y1,y2,acc,cnt});
+  }
+}
+
+async function analyzeAudio(k, onProg){
+  const M = await mb();
+  const file = files[k];
+  const input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(file) });
+  const vTrack = await input.getPrimaryVideoTrack();
+  const aTrack = await input.getPrimaryAudioTrack();
+  if (!vTrack) throw new Error('영상 트랙을 찾지 못했어요.');
+  if (!aTrack) throw new Error('소리가 없는 영상이에요. 타구음 분석에는 소리가 필요해요.');
+  const duration = await input.computeDuration();
+  const first = await aTrack.getFirstTimestamp();
+  let proc = null;
+
+  let direct = typeof AudioDecoder !== 'undefined';
+  if (direct) { try { direct = await aTrack.canDecode(); } catch { direct = false; } }
+  if (direct) {
+    try {
+      const sink = new M.AudioSampleSink(aTrack);
+      let buf = null, last = 0;
+      for await (const s of sink.samples()) {
+        if (!proc) proc = new EnvProc(s.sampleRate, s.timestamp, duration);
+        const opt = { planeIndex: 0, format: 'f32-planar' };
+        const need = s.allocationSize(opt)/4;
+        if (!buf || buf.length < need) buf = new Float32Array(Math.max(need, 8192));
+        const view = buf.subarray(0, need); s.copyTo(view, opt); proc.push(view);
+        if (s.timestamp - last > 2) { last = s.timestamp; onProg(s.timestamp/duration); await new Promise(r => setTimeout(r)); }
+        s.close();
+      }
+    } catch (e) { console.warn('직접 디코딩 실패, 대체 방식 사용', e); proc = null; direct = false; }
+  }
+  if (!direct) proc = await decodeFallback(M, aTrack, first, duration, onProg);
+  onProg(1);
+  return { input, vTrack, aTrack, duration, env: proc.env.subarray(0, proc.n), n: proc.n, hopSec: proc.hopSec, t0: proc.t0 };
+}
+
+// AudioDecoder가 없는 브라우저: 20초씩 오디오만 m4a로 감싸서 decodeAudioData
+async function decodeFallback(M, aTrack, first, duration, onProg){
+  const sink = new M.EncodedPacketSink(aTrack);
+  const cfg = await aTrack.getDecoderConfig();
+  const codec = await aTrack.getCodec();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  const W = 20, PRE = 0.5;
+  let t = first, proc = null;
+  try {
+    while (t < duration - 0.05) {
+      const ws = Math.max(first, t - PRE), we = Math.min(duration, t + W);
+      const out = new M.Output({ format: new M.Mp4OutputFormat(), target: new M.BufferTarget() });
+      const src = new M.EncodedAudioPacketSource(codec); out.addAudioTrack(src); await out.start();
+      const startP = await sink.getPacket(ws); if (!startP) break;
+      const endP = await sink.getPacket(we);
+      let realStart = null, firstAdd = true;
+      for await (const p of sink.packets(startP, endP && endP.timestamp > startP.timestamp ? endP : undefined)) {
+        if (p.timestamp >= we) break;
+        if (realStart === null) realStart = p.timestamp;
+        await src.add(p.clone({ timestamp: p.timestamp - realStart }), firstAdd ? { decoderConfig: cfg } : undefined); firstAdd = false;
+      }
+      src.close(); await out.finalize();
+      if (realStart === null) break;
+      const ab = await ctx.decodeAudioData(out.target.buffer);
+      const sr = ab.sampleRate, ch = ab.getChannelData(0);
+      if (!proc) proc = new EnvProc(sr, t, duration);
+      const i0 = Math.max(0, Math.round((t - realStart)*sr)), i1 = Math.min(ch.length, Math.round((we - realStart)*sr));
+      if (i1 > i0) proc.push(ch.subarray(i0, i1));
+      t = we; onProg((t - first)/(duration - first));
+    }
+  } finally { try { ctx.close(); } catch {} }
+  if (!proc) throw new Error('이 브라우저에서는 소리를 읽을 수 없어요. iOS를 최신으로 업데이트하거나 PC 크롬에서 열어주세요.');
+  return proc;
+}
+
+/* ---------- 타구 감지 ---------- */
+function background(cam){
+  const B = 200, { env, n } = cam, nb = Math.ceil(n/B), blk = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) { const a = Array.from(env.subarray(b*B, Math.min(n, (b+1)*B))).sort((x,y)=>x-y); blk[b] = a[Math.floor(a.length*0.2)] ?? -120; }
+  const sm = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) { const w = []; for (let j = b-2; j <= b+2; j++) if (j >= 0 && j < nb) w.push(blk[j]); w.sort((x,y)=>x-y); sm[b] = w[w.length>>1]; }
+  cam.bgBlock = sm; cam.bgB = B;
+}
+function detect(cam, sens){
+  if (!cam.bgBlock) background(cam);
+  const { env, n, hopSec, t0, bgBlock, bgB } = cam;
+  const rise = 22 - sens*1.6, lvl = rise + 3;
+  const c = [];
+  for (let i = 6; i < n-4; i++) {
+    const pre = Math.max(env[i-6], env[i-5], env[i-4], env[i-3]);
+    const r = env[i] - pre; if (r < rise) continue;
+    const pk = Math.max(env[i], env[i+1], env[i+2], env[i+3]);
+    const s = pk - bgBlock[Math.floor(i/bgB)]; if (s < lvl) continue;
+    const last = c[c.length-1];
+    if (last && i - last.i <= 12) { if (s > last.s) last.s = s; continue; }
+    c.push({ i, s });
+  }
+  const out = [];
+  for (const h of c) {
+    const t = t0 + h.i*hopSec, prev = out[out.length-1];
+    if (prev && t - prev.t < 0.25) { if (h.s > prev.s) { prev.t = t; prev.s = h.s; } continue; }
+    out.push({ t, s: h.s });
+  }
+  return out;
+}
+
+/* ---------- 두 영상 싱크 (타구 시간차 히스토그램) ---------- */
+function computeSync(hA, hB){
+  const R = 600, bin = 0.002, nb = Math.round(2*R/bin) + 1, hist = new Float32Array(nb);
+  let j0 = 0;
+  for (const a of hA) {
+    while (j0 < hB.length && hB[j0].t < a.t - R) j0++;
+    for (let j = j0; j < hB.length && hB[j].t <= a.t + R; j++) hist[Math.round((hB[j].t - a.t + R)/bin)] += 1;
+  }
+  const K = 9, sig = 3, ker = []; for (let k = -K; k <= K; k++) ker.push(Math.exp(-k*k/(2*sig*sig)));
+  const sm = new Float32Array(nb);
+  for (let i = 0; i < nb; i++) { if (!hist[i]) continue; for (let k = -K; k <= K; k++) { const j = i+k; if (j >= 0 && j < nb) sm[j] += hist[i]*ker[k+K]; } }
+  let best = 0; for (let i = 1; i < nb; i++) if (sm[i] > sm[best]) best = i;
+  let second = -1;
+  for (let i = best-125; i <= best+125; i++) { if (i < 0 || i >= nb || Math.abs(i-best) < 12) continue; if (second < 0 || sm[i] > sm[second]) second = i; }
+  // 로컬 피크인지 확인
+  let pair = second >= 0 && sm[second] >= 0.3*sm[best] && sm[second] >= sm[second-1] && sm[second] >= sm[second+1];
+  const off = pair ? ((best+second)/2)*bin - R : best*bin - R;
+  const d = pair ? Math.abs(best-second)*bin/2 : 0;
+  return { off, d, peak: sm[best] };
+}
+
+/* ---------- 누가 쳤는지 + 랠리 묶기 ---------- */
+function buildEvents(){
+  const A = cams.A, B = cams.B;
+  if (!B || !A) { const c = A || B; events = c.hits.map(h => ({ t: h.t, who: null })); return; }
+  const off = sync.off + (+$('nudge').value || 0), d = sync.d, win = d ? d + 0.04 : 0.15;
+  const hb = B.hits, used = new Uint8Array(hb.length), ev = [];
+  let matched = 0, j = 0;
+  for (const a of A.hits) {
+    const target = a.t + off;
+    while (j < hb.length && hb[j].t < target - win) j++;
+    let bi = -1;
+    for (let k = j; k < hb.length && hb[k].t <= target + win; k++) if (!used[k] && (bi < 0 || Math.abs(hb[k].t-target) < Math.abs(hb[bi].t-target))) bi = k;
+    if (bi < 0) { ev.push({ t: a.t, who: 'A' }); continue; }
+    used[bi] = 1; matched++;
+    const b = hb[bi], delta = b.t - target;
+    let who;
+    if (d) who = delta > 0.012 ? 'A' : delta < -0.012 ? 'B' : (a.s >= b.s ? 'A' : 'B');
+    else who = a.s >= b.s ? 'A' : 'B';
+    ev.push({ t: who === 'A' ? a.t : b.t - off, who });
+  }
+  hb.forEach((b, i) => { if (!used[i]) ev.push({ t: b.t - off, who: 'B' }); });
+  ev.sort((x,y) => x.t - y.t);
+  events = [];
+  for (const e of ev) { const p = events[events.length-1]; if (p && e.t - p.t < 0.12) continue; events.push(e); }
+  sync.match = matched / Math.max(1, Math.min(A.hits.length, hb.length));
+}
+function buildRallies(){
+  const groups = []; let cur = null;
+  for (const e of events) {
+    if (cur && e.t - cur[cur.length-1].t <= P.gap) cur.push(e); else { cur = [e]; groups.push(cur); }
+  }
+  let rs = groups.filter(g => g.length >= P.minHits).map(g => ({ s: g[0].t - P.pre, e: g[g.length-1].t + P.post, hits: g.length, a: g.filter(x => x.who === 'A').length, b: g.filter(x => x.who === 'B').length, on: true }));
+  const m = [];
+  for (const r of rs) { const p = m[m.length-1]; if (p && r.s <= p.e) { p.e = Math.max(p.e, r.e); p.hits += r.hits; p.a += r.a; p.b += r.b; } else m.push(r); }
+  const [lo, hi] = domain();
+  rallies = m.map(r => ({ ...r, s: Math.max(lo, r.s), e: Math.min(hi, r.e) }));
+}
+function offset(){ return cams.A && cams.B ? sync.off + (+$('nudge').value || 0) : 0; }
+function baseKey(){ return cams.A ? 'A' : 'B'; }
+// 기준 시계 = A (A가 없으면 B)
+function domain(){
+  const k = baseKey(), c = cams[k]; let lo = 0, hi = c.duration;
+  if (cams.A && cams.B) { const o = offset(); lo = Math.min(0, -o); hi = Math.max(cams.A.duration, cams.B.duration - o); }
+  return [lo, hi];
+}
+
+/* ---------- 분석 실행 ---------- */
+$('analyze').addEventListener('click', async () => {
+  $('analyze').disabled = true; $('status').classList.remove('err');
+  try {
+    for (const k of ['A','B']) {
+      cams[k] = null;
+      if (!files[k]) continue;
+      $('status').textContent = `${nm(k)} 영상 소리 분석 중…`;
+      const t = performance.now();
+      cams[k] = await analyzeAudio(k, p => { $('prog'+k).style.width = (p*100).toFixed(1)+'%'; $('status').textContent = `${nm(k)} 영상 소리 분석 중… ${(p*100).toFixed(0)}%`; });
+      cams[k].hits = detect(cams[k], P.sens);
+      cams[k].secs = (performance.now() - t)/1000;
+    }
+    recompute(true);
+    setupPlayers();
+    $('emptyState').hidden = true; $('results').hidden = false;
+    const took = ['A','B'].filter(k => cams[k]).map(k => `${nm(k)} ${cams[k].secs.toFixed(0)}초`).join(', ');
+    $('status').textContent = `분석 완료 (${took})`;
+  } catch (e) {
+    console.error(e); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
+  } finally { $('analyze').disabled = false; }
+});
+
+function recompute(resync){
+  for (const k of ['A','B']) if (cams[k]) cams[k].hits = detect(cams[k], P.sens);
+  if (cams.A && cams.B && (resync || !sync)) sync = computeSync(cams.A.hits, cams.B.hits);
+  buildEvents(); buildRallies(); renderAll();
+}
+
+/* ---------- 설정 ---------- */
+const ctrlMap = { sens: ['oSens', v => v], gap: ['oGap', v => v + '초'], pre: ['oPre', v => v + '초'], post: ['oPost', v => v + '초'], minHits: ['oMin', v => v + '번'] };
+for (const [id, [o, f]] of Object.entries(ctrlMap)) {
+  const el = $(id); $(o).textContent = f(el.value);
+  el.addEventListener('input', () => { P[id] = +el.value; $(o).textContent = f(el.value); });
+  el.addEventListener('change', () => { if (!cams.A && !cams.B) return; recompute(id === 'sens'); });
+}
+$('nudge').addEventListener('change', () => { buildEvents(); buildRallies(); renderAll(); });
+
+/* ---------- 렌더 ---------- */
+function renderAll(){ renderScore(); drawTL(); renderList(); }
+function renderScore(){
+  const on = rallies.filter(r => r.on);
+  $('sRallies').textContent = rallies.length;
+  const [lo, hi] = domain();
+  $('sLen').textContent = `${fmt(on.reduce((s,r) => s + r.e - r.s, 0))} / ${fmt(hi - lo)}`;
+  const two = cams.A && cams.B;
+  $('sA').textContent = two ? events.filter(e => e.who === 'A').length : events.length;
+  $('sB').textContent = two ? events.filter(e => e.who === 'B').length : '–';
+  $('legBwrap').hidden = !two;
+  $('syncRow').hidden = !two;
+  if (two) {
+    const o = sync.off;
+    $('syncInfo').textContent = `싱크: ${nm('B')} 영상이 ${Math.abs(o).toFixed(2)}초 ${o >= 0 ? '늦게' : '일찍'} 시작 기준 · 타구 일치율 ${Math.round(sync.match*100)}%` + (sync.d ? ` · 소리 도달차 ${(sync.d*1000).toFixed(0)}ms` : ' · 도달차 미검출(음량으로 구분)');
+  }
+}
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+let playhead = null;
+function drawTL(){
+  const cv = $('tl'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = w*dpr; cv.height = h*dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const [lo, hi] = domain(), x = t => (t - lo)/(hi - lo)*w;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = css('--court');
+  for (const r of rallies) { g.globalAlpha = r.on ? 0.3 : 0.08; g.fillRect(x(r.s), 6, Math.max(2, x(r.e) - x(r.s)), h - 24); }
+  g.globalAlpha = 1;
+  const two = cams.A && cams.B, mid = 6 + (h - 24)/2;
+  for (const e of events) {
+    const xx = Math.round(x(e.t)) + 0.5;
+    g.strokeStyle = e.who === 'B' ? css('--pb') : css('--pa'); g.lineWidth = 1;
+    g.beginPath();
+    if (two) { if (e.who === 'B') { g.moveTo(xx, mid + 2); g.lineTo(xx, h - 22); } else { g.moveTo(xx, 10); g.lineTo(xx, mid - 2); } }
+    else { g.moveTo(xx, 12); g.lineTo(xx, h - 22); }
+    g.stroke();
+  }
+  g.fillStyle = css('--muted'); g.font = '12px "Barlow Condensed", sans-serif'; g.textBaseline = 'bottom';
+  const span = hi - lo, step = [30, 60, 120, 300, 600, 900, 1800].find(s => span/s <= 8) || 3600;
+  for (let t = Math.ceil(lo/step)*step; t <= hi; t += step) { const xx = x(t); g.fillRect(xx, h - 18, 1, 4); if (xx > 8 && xx < w - 24) g.fillText(fmt(t), xx + 3, h - 2); }
+  if (playhead !== null) { g.fillStyle = css('--ball'); g.fillRect(x(playhead) - 1, 2, 3, h - 18); }
+}
+window.addEventListener('resize', () => { if (rallies) drawTL(); });
+$('tl').addEventListener('click', ev => {
+  const cv = $('tl'), r = cv.getBoundingClientRect(), [lo, hi] = domain();
+  const t = lo + (ev.clientX - r.left)/r.width*(hi - lo);
+  const i = rallies.findIndex(q => t >= q.s - 2 && t <= q.e + 2);
+  if (i >= 0) playQueue([i]); else { stopPlay(); seekAll(t); }
+});
+
+function renderList(){
+  const L = $('list'); L.innerHTML = '';
+  if (!rallies.length) { L.innerHTML = '<div class="rally"><span></span><span></span><span class="t">감지된 랠리가 없어요. 감지 설정에서 감도를 올려보세요.</span></div>'; return; }
+  const two = cams.A && cams.B;
+  rallies.forEach((r, i) => {
+    const row = document.createElement('div'); row.className = 'rally' + (r.on ? '' : ' off');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'r' + i; cb.checked = r.on; cb.setAttribute('aria-label', `랠리 ${i+1} 포함`);
+    cb.addEventListener('change', () => { r.on = cb.checked; row.classList.toggle('off', !r.on); renderScore(); drawTL(); });
+    const no = document.createElement('span'); no.className = 'no'; no.textContent = i + 1;
+    const t = document.createElement('label'); t.className = 't'; t.htmlFor = cb.id;
+    t.innerHTML = `${fmt(r.s)} – ${fmt(r.e)}<small>${(r.e - r.s).toFixed(0)}초 · 타구 ${r.hits}번</small>`;
+    const chips = document.createElement('span'); chips.className = 'chips';
+    if (two) chips.innerHTML = `<span class="chip pa">${esc(nm('A'))} ${r.a}</span><span class="chip pb">${esc(nm('B'))} ${r.b}</span>`;
+    const pb = document.createElement('button'); pb.textContent = '▶'; pb.setAttribute('aria-label', `랠리 ${i+1} 재생`);
+    pb.addEventListener('click', () => playQueue([i]));
+    row.append(cb, no, t, chips, pb); L.append(row);
+  });
+  $('toggleAll').textContent = rallies.every(r => r.on) ? '모두 해제' : '모두 선택';
+}
+function esc(s){ return s.replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+$('toggleAll').addEventListener('click', () => { const all = rallies.every(r => r.on); rallies.forEach(r => r.on = !all); renderAll(); });
+
+/* ---------- 플레이어 ---------- */
+const vids = { A: $('vA'), B: $('vB') };
+const urls = {};
+function setupPlayers(){
+  for (const k of ['A','B']) {
+    if (urls[k]) URL.revokeObjectURL(urls[k]);
+    if (cams[k]) { urls[k] = URL.createObjectURL(files[k]); vids[k].src = urls[k]; }
+    else { vids[k].removeAttribute('src'); vids[k].load(); }
+    vids[k].onerror = () => { $('vidErr').hidden = false; $('vidErr').textContent = '이 화면에서는 영상 미리보기가 막혀 있어요. 분석과 저장은 그대로 쓸 수 있어요.'; };
+  }
+  const two = cams.A && cams.B;
+  $('viewSeg').hidden = !two;
+  $('expB').hidden = !cams.B; $('expA').hidden = !cams.A;
+  setView(two ? 'both' : baseKey());
+  updateLabels();
+}
+function setView(v){
+  view = v;
+  for (const b of $('viewSeg').querySelectorAll('button')) b.setAttribute('aria-pressed', b.dataset.v === v);
+  $('stage').classList.toggle('both', v === 'both');
+  $('boxA').hidden = !(cams.A && (v === 'A' || v === 'both'));
+  $('boxB').hidden = !(cams.B && (v === 'B' || v === 'both'));
+  for (const k of ['A','B']) if ($('box'+k).hidden) vids[k].pause();
+  if (playing) seekAll(clock(), true);
+}
+$('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); });
+function visible(){ return ['A','B'].filter(k => cams[k] && !$('box'+k).hidden); }
+function master(){ return visible()[0]; }
+function camTime(k, t){ return k === 'B' && cams.A ? t + offset() : t; }
+function clock(){ const m = master(); if (!m) return 0; const ct = vids[m].currentTime; return m === 'B' && cams.A ? ct - offset() : ct; }
+function seekAll(t, play){
+  for (const k of visible()) {
+    const v = vids[k], ct = Math.min(Math.max(0, camTime(k, t)), cams[k].duration - 0.05);
+    v.currentTime = ct; if (play) v.play().catch(() => {});
+  }
+  playhead = t; drawTL();
+}
+let queue = [], qi = 0, playing = false;
+function playQueue(idx){
+  queue = idx; qi = 0; if (!queue.length) { $('now').textContent = '선택된 랠리가 없어요.'; return; }
+  playing = true; startRally();
+}
+function startRally(){ const r = rallies[queue[qi]]; seekAll(r.s, true); showNow(); }
+function showNow(){ const i = queue[qi]; $('now').textContent = `랠리 ${i+1}` + (queue.length > 1 ? ` · ${qi+1}/${queue.length}` : '') + ` · ${fmt(rallies[i].s)}`; }
+function stopPlay(){ playing = false; for (const k of ['A','B']) vids[k].pause(); }
+$('playAll').addEventListener('click', () => playQueue(rallies.map((r, i) => r.on ? i : -1).filter(i => i >= 0)));
+$('stop').addEventListener('click', () => { stopPlay(); $('now').textContent = '정지됨'; });
+$('sound').addEventListener('click', () => {
+  const m = !vids.A.muted || !vids.B.muted;
+  const target = master();
+  for (const k of ['A','B']) vids[k].muted = true;
+  if (!m && target) vids[target].muted = false;
+  $('sound').textContent = m ? '소리 켜기' : '소리 끄기';
+});
+for (const k of ['A','B']) vids[k].addEventListener('timeupdate', () => {
+  if (k !== master()) return;
+  const t = clock(); playhead = t; drawTL();
+  if (playing) {
+    const r = rallies[queue[qi]];
+    if (r && t >= r.e) { qi++; if (qi < queue.length) startRally(); else { stopPlay(); $('now').textContent = '하이라이트 끝'; } return; }
+    const other = visible().find(x => x !== k);
+    if (other) { const want = camTime(other, t); if (Math.abs(vids[other].currentTime - want) > 0.25) vids[other].currentTime = want; if (vids[other].paused && !vids[k].paused) vids[other].play().catch(() => {}); }
+  }
+});
+
+/* ---------- 내보내기 (재인코딩 없이 잘라 붙이기) ---------- */
+const made = [];
+async function exportCam(k){
+  const M = await mb();
+  const cam = cams[k], sel = rallies.filter(r => r.on);
+  if (!sel.length) { $('xStatus').textContent = '체크된 랠리가 없어요.'; return; }
+  const btns = [$('expA'), $('expB')]; btns.forEach(b => b.disabled = true);
+  const bar = $('progX'); bar.style.width = '0'; bar.style.setProperty('--c', k === 'A' ? 'var(--pa)' : 'var(--pb)');
+  try {
+    const { vTrack, aTrack } = cam;
+    const vSink = new M.EncodedPacketSink(vTrack), aSink = aTrack ? new M.EncodedPacketSink(aTrack) : null;
+    const vCfg = await vTrack.getDecoderConfig(), vCodec = await vTrack.getCodec(), rotation = await vTrack.getRotation();
+    const aCfg = aTrack ? await aTrack.getDecoderConfig() : null, aCodec = aTrack ? await aTrack.getCodec() : null;
+    const segs = sel.map(r => ({ s: Math.max(0, camTime(k, r.s)), e: Math.min(cam.duration, camTime(k, r.e)) })).filter(s => s.e - s.s > 0.3);
+    if (!segs.length) throw new Error(`${nm(k)} 영상에 해당 구간이 없어요.`);
+    let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
+    const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + '_highlight_' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const open = async () => {
+      out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
+      vs = new M.EncodedVideoPacketSource(vCodec); out.addVideoTrack(vs, { rotation });
+      if (aTrack) { as = new M.EncodedAudioPacketSource(aCodec); out.addAudioTrack(as); }
+      await out.start(); outT = 0; bytes = 0; firstV = true; firstA = true;
+    };
+    const close = async () => {
+      vs.close(); if (as) as.close(); await out.finalize();
+      part++; const blob = new Blob([out.target.buffer], { type: 'video/mp4' });
+      addFile(`${base}_${part}.mp4`, blob, outT); out = null;
+    };
+    for (let si = 0; si < segs.length; si++) {
+      const seg = segs[si];
+      if (!out) await open();
+      const key = (await vSink.getKeyPacket(seg.s, { verifyKeyPackets: true })) || (await vSink.getFirstKeyPacket());
+      const startT = key.timestamp;
+      const lastP = await vSink.getPacket(seg.e);
+      const endKey = lastP ? await vSink.getNextKeyPacket(lastP) : null;
+      let maxEnd = startT;
+      for await (const p of vSink.packets(key, endKey || undefined)) {
+        if (p.timestamp < startT - 1e-6) continue;
+        await vs.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstV ? { decoderConfig: vCfg } : undefined); firstV = false;
+        maxEnd = Math.max(maxEnd, p.timestamp + p.duration); bytes += p.data.byteLength;
+      }
+      if (aSink) {
+        const a0 = await aSink.getPacket(startT) || await aSink.getFirstPacket();
+        const aEnd = await aSink.getPacket(maxEnd);
+        for await (const p of aSink.packets(a0, aEnd && aEnd.timestamp > a0.timestamp ? aEnd : undefined)) {
+          if (p.timestamp < startT - 1e-6) continue; if (p.timestamp >= maxEnd) break;
+          await as.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstA ? { decoderConfig: aCfg } : undefined); firstA = false;
+          bytes += p.data.byteLength;
+        }
+      }
+      outT += maxEnd - startT;
+      bar.style.width = ((si + 1)/segs.length*100).toFixed(1) + '%';
+      $('xStatus').textContent = `${nm(k)} 하이라이트 만드는 중… 랠리 ${si + 1}/${segs.length}`;
+      if (bytes > PART_LIMIT) await close();
+    }
+    if (out) await close();
+    $('xStatus').textContent = `${nm(k)} 하이라이트 완성. 아래에서 저장하세요.`;
+  } catch (e) {
+    console.error(e); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
+  } finally { btns.forEach(b => b.disabled = false); }
+}
+$('expA').addEventListener('click', () => exportCam('A'));
+$('expB').addEventListener('click', () => exportCam('B'));
+
+let downloadsP = null;
+function getDownloads(){ if (!downloadsP) downloadsP = (window.claude?.use ? window.claude.use('downloads') : Promise.resolve(null)).catch(() => null); return downloadsP; }
+function addFile(name, blob, secs){
+  const row = document.createElement('div'); row.className = 'fileitem';
+  const s = document.createElement('span'); s.textContent = `${name} · ${fmt(secs)} · ${(blob.size/1048576).toFixed(0)}MB`;
+  const b = document.createElement('button'); b.className = 'primary'; b.textContent = '저장';
+  b.addEventListener('click', async () => {
+    const dl = await getDownloads();
+    if (dl) {
+      try { await dl.save({ filename: name, data: blob }); b.textContent = '저장됨'; }
+      catch (e) { b.textContent = e?.code === 'declined' ? '저장' : '다시 시도'; if (e?.code && e.code !== 'declined') $('xStatus').textContent = '저장 실패: ' + (e.message || e.code); }
+    } else {
+      const file = new File([blob], name, { type: 'video/mp4' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); b.textContent = '저장됨'; return; }
+        catch (e) { if (e?.name === 'AbortError') return; }
+      }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    }
+  });
+  row.append(s, b); $('files').prepend(row); made.push(blob);
+}
+</script>
+
+</body>
+</html>
