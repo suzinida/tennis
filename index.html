@@ -100,13 +100,44 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
 .empty ol{margin:6px 0 0;padding-left:1.2em}
 .sync{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.88rem}
 .sync input{width:7em;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
+
+.player{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:16/9;max-width:100%}
+.player video{width:100%;height:100%;object-fit:contain;display:block}
+.player canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:.9rem}
+th,td{padding:8px 12px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:.78rem;letter-spacing:.03em;border-top:0}
+td:first-child,th:first-child{text-align:left}
+td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;min-width:0;border-top:4px solid var(--c)}
+.card[data-k="A"]{--c:var(--pa)} .card[data-k="B"]{--c:var(--pb)}
+.card.sel{outline:2px solid var(--court);outline-offset:-2px}
+.card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#000}
+.card .body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.card .ttl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.card .ttl b{font-family:var(--display);font-size:1.25rem;font-weight:700}
+.card .ttl span{color:var(--muted);font-size:.82rem;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:.86rem;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.type{font-size:.75rem;font-weight:600;padding:1px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.t-fh{color:var(--pa)} .t-bh{color:var(--pb)} .t-ov{color:var(--court)} .t-un{color:var(--muted)}
+.cmpgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmpgrid img{width:100%;border-radius:8px;display:block}
+.cmpgrid figure{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.cmpgrid figcaption{font-size:.85rem;color:var(--muted)}
+.handrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.88rem}
+.handrow .badge{--c:var(--pa)} #handRowB .badge{--c:var(--pb)}
+.file.ok{color:var(--ink)} .file.bad{color:var(--warn)}
+#diag pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;margin:0;color:var(--muted);max-height:240px;overflow:auto}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
   <header>
     <h1>랠리<span>컷</span></h1>
-    <span class="tag">타구음으로 랠리만 골라내는 테니스 하이라이트 편집기</span>
+    <span class="tag">랠리 하이라이트부터 자세 분석까지, 테니스 영상 한 번에</span>
   </header>
 
   <section>
@@ -130,7 +161,13 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
         <button class="primary" id="analyze" disabled>분석 시작</button>
         <span class="status" id="status">영상을 고르면 시작할 수 있어요.</span>
       </div>
-      <p class="hint">영상은 이 기기 안에서만 처리되고 어디에도 올라가지 않아요. 사진 앱보다 '파일' 앱에서 고르면 iOS의 변환 과정 없이 빨리 열려요.</p>
+      <p class="hint">영상은 이 기기 안에서만 처리되고 어디에도 올라가지 않아요.</p>
+      <p class="hint"><b>긴 영상은 '파일' 앱에서 고르세요.</b> 사진 보관함에서 고르면 iPhone이 영상을 먼저 변환하느라 몇 분씩 아무 반응이 없거나 실패할 수 있어요. 사진 앱에서 영상 → 공유 → '파일에 저장'을 한 뒤, 영상 고르기에서 '파일 선택'(또는 '찾아보기')으로 넣으면 바로 들어가요.</p>
+    </div>
+    <div class="panel" id="diag" hidden>
+      <div class="row" style="justify-content:space-between"><b>문제 확인용 정보</b><button id="diagCopy">복사</button></div>
+      <p class="hint">이 화면을 캡처해서 보내주시면 원인을 바로 찾을 수 있어요.</p>
+      <pre id="diagText"></pre>
     </div>
   </section>
 
@@ -158,6 +195,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
         <label for="nudge">보정(초)</label>
         <input type="number" id="nudge" step="0.01" value="0">
       </div>
+      <p class="hint" id="singleNote" hidden></p>
       <canvas id="tl" aria-label="전체 타임라인. 누르면 해당 랠리를 재생합니다"></canvas>
       <div class="legend">
         <span><i style="background:var(--court);opacity:.35"></i>랠리 구간</span>
@@ -204,14 +242,60 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
     <section>
       <h2>4 · 저장</h2>
       <div class="panel">
-        <p class="hint">체크된 랠리만 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 랠리 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
+        <p class="hint">하이라이트는 체크된 랠리 전체를, 스윙 모음은 그 안에서 본인이 친 순간 앞 1.5초~뒤 1초만 모아요. 둘 다 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 구간 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
         <div class="row">
           <button class="primary" id="expA">A 하이라이트 만들기</button>
           <button class="primary" id="expB">B 하이라이트 만들기</button>
         </div>
+        <div class="row">
+          <button id="swA">A 스윙만 모음</button>
+          <button id="swB">B 스윙만 모음</button>
+        </div>
         <div class="bar"><i id="progX"></i></div>
         <span class="status" id="xStatus"></span>
         <div class="files" id="files"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5 · 자세 분석</h2>
+      <div class="panel">
+        <p class="hint">체크된 랠리 안에서 각자 친 순간마다 관절을 인식해 샷 종류와 자세 수치를 계산해요. 처음 한 번은 관절 인식 모델을 받아오느라 조금 걸려요.</p>
+        <div class="handrow" id="handRowA"><span class="badge">A</span><span id="hnA">A</span>
+          <div class="seg" role="group" aria-label="A 주로 쓰는 손"><button data-h="R" aria-pressed="true" id="hAR">오른손잡이</button><button data-h="L" aria-pressed="false" id="hAL">왼손잡이</button></div></div>
+        <div class="handrow" id="handRowB"><span class="badge">B</span><span id="hnB">B</span>
+          <div class="seg" role="group" aria-label="B 주로 쓰는 손"><button data-h="R" aria-pressed="true" id="hBR">오른손잡이</button><button data-h="L" aria-pressed="false" id="hBL">왼손잡이</button></div></div>
+        <div class="row">
+          <div class="seg" id="modelSeg" role="group" aria-label="분석 정확도">
+            <button data-m="lite" aria-pressed="true" id="mLite">빠르게</button>
+            <button data-m="full" aria-pressed="false" id="mFull">정확하게</button>
+          </div>
+          <button class="primary" id="poseGo">자세 분석 시작</button>
+          <button id="poseCancel" hidden>멈추기</button>
+        </div>
+        <div class="bar"><i id="poseProg"></i></div>
+        <span class="status" id="poseStatus"></span>
+      </div>
+
+      <div id="poseResults" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="tablewrap"><table id="sumTable"></table></div>
+        <p class="hint">카메라 한 대로 추정한 값이라 정확한 각도보다는 스윙끼리 비교하는 용도로 보세요. 타점 높이는 허리 0% · 어깨 100% 기준이고, 무릎 각도는 작을수록 많이 굽힌 거예요.</p>
+        <div class="player"><video id="sv" playsinline muted preload="auto"></video><canvas id="sov"></canvas></div>
+        <div class="row">
+          <div class="seg" id="rateSeg" role="group" aria-label="재생 속도">
+            <button data-r="1" aria-pressed="false" id="r1">1x</button>
+            <button data-r="0.5" aria-pressed="true" id="r05">0.5x</button>
+            <button data-r="0.25" aria-pressed="false" id="r025">0.25x</button>
+          </div>
+          <button id="replay">다시 보기</button>
+          <button id="skel" aria-pressed="true">관절선 끄기</button>
+          <span class="nowplaying" id="snow">아래 카드에서 '보기'를 누르세요.</span>
+        </div>
+        <div class="row" style="justify-content:space-between"><h2>스윙 목록</h2>
+          <div class="seg" id="fltSeg" role="group" aria-label="선수 필터"><button data-f="all" aria-pressed="true" id="fAll">전체</button><button data-f="A" aria-pressed="false" id="fA">A</button><button data-f="B" aria-pressed="false" id="fB">B</button></div></div>
+        <span class="hint">'비교'를 두 개 고르면 나란히 보여줘요. A와 B의 스윙끼리도 비교할 수 있어요.</span>
+        <div class="panel" id="compare" hidden></div>
+        <div class="cards" id="cards"></div>
       </div>
     </section>
   </div>
@@ -220,7 +304,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--court)}
 <script type="module">
 const MB_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.59.0/+esm';
 let MB = null;
-async function mb(){ if(!MB) MB = await import(MB_URL); return MB; }
+async function mb(){ if (!MB) { try { MB = await import(MB_URL); } catch (e) { throw new Error('영상 처리 프로그램을 받아오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.'); } } return MB; }
 
 const $ = id => document.getElementById(id);
 const fmt = s => { s = Math.max(0, s); const m = Math.floor(s/60), ss = Math.floor(s%60); const h = Math.floor(m/60); return h ? `${h}:${String(m%60).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${m}:${String(ss).padStart(2,'0')}`; };
@@ -229,23 +313,87 @@ const PART_LIMIT = 450 * 1024 * 1024;
 const cams = { A: null, B: null };
 const files = { A: null, B: null };
 const P = { sens: 6, gap: 4, pre: 1.5, post: 2, minHits: 2 };
-let sync = null, events = [], rallies = [], view = 'both';
+let sync = null, events = [], rallies = [], view = 'both', split = false;
 
 /* ---------- 파일 선택 ---------- */
+const probing = { A: null, B: null };
 for (const k of ['A','B']) {
+  $('file'+k).addEventListener('click', () => {
+    setInfo(k, '영상을 고르는 중… 사진 보관함에서 골랐다면 iPhone이 변환하는 동안 잠시 기다려 주세요.');
+  });
+  $('file'+k).addEventListener('cancel', () => setInfo(k, files[k] ? infoText(k) : '아직 없음'));
   $('file'+k).addEventListener('change', e => {
-    const f = e.target.files[0]; if (!f) return;
-    files[k] = f;
-    $('info'+k).textContent = `${f.name} · ${(f.size/1048576).toFixed(0)}MB`;
+    const f = e.target.files[0]; if (!f) { setInfo(k, files[k] ? infoText(k) : '아직 없음'); return; }
+    files[k] = f; meta[k] = null;
     $('prog'+k).style.width = '0';
-    $('analyze').disabled = !files.A && !files.B;
-    $('status').textContent = '준비됐어요. 분석 시작을 누르세요.';
+    probing[k] = probe(k, f);
+    refreshAnalyzeBtn();
   });
   $('name'+k).addEventListener('input', updateLabels);
 }
+const meta = { A: null, B: null };
+function setInfo(k, text, cls){ const el = $('info'+k); el.textContent = text; el.className = 'file' + (cls ? ' ' + cls : ''); }
+function infoText(k){
+  const f = files[k], m = meta[k];
+  let t = `${f.name} · ${(f.size/1048576).toFixed(0)}MB`;
+  if (m) t += ` · ${fmt(m.duration)} · ${m.w}×${m.h} · ${m.fps ? Math.round(m.fps) + 'fps' : ''} · ${m.codec || '?'}${m.audio ? '' : ' · 소리 없음'}`;
+  return t;
+}
+function refreshAnalyzeBtn(){
+  const any = files.A || files.B;
+  const busy = ['A','B'].some(k => files[k] && !meta[k] && !meta[k + 'err']);
+  const bad = ['A','B'].some(k => files[k] && meta[k + 'err']);
+  $('analyze').disabled = !any || busy || bad;
+  $('status').textContent = !any ? '영상을 고르면 시작할 수 있어요.' : busy ? '영상 정보를 읽는 중…' : bad ? '열리지 않는 영상이 있어요. 위 안내를 확인해 주세요.' : '준비됐어요. 분석 시작을 누르세요.';
+}
+async function probe(k, f){
+  meta[k + 'err'] = null;
+  setInfo(k, `${f.name} · ${(f.size/1048576).toFixed(0)}MB · 영상 정보 읽는 중…`);
+  refreshAnalyzeBtn();
+  try {
+    const M = await mb();
+    const input = new M.Input({ formats: M.ALL_FORMATS, source: new M.BlobSource(f) });
+    const vt = await input.getPrimaryVideoTrack(), at = await input.getPrimaryAudioTrack();
+    if (!vt) throw new Error('영상 트랙이 없어요.');
+    const duration = await input.computeDuration();
+    let fps = 0; try { fps = (await vt.computePacketStats(120)).averagePacketRate; } catch {}
+    const m = { duration, w: await vt.getDisplayWidth(), h: await vt.getDisplayHeight(), fps, codec: await vt.getCodec(), audio: !!at };
+    if (files[k] !== f) return;
+    meta[k] = m;
+    let warn = '';
+    if (!m.audio) warn = ' — 소리가 없어서 타구를 찾을 수 없어요.';
+    else if (m.w * m.h > 2.2e6) warn = ' — 4K 영상이라 처리가 오래 걸려요. 다음엔 HD로 찍는 걸 추천해요.';
+    setInfo(k, infoText(k) + warn, m.audio ? 'ok' : 'bad');
+    if (!m.audio) meta[k + 'err'] = 'noaudio';
+  } catch (e) {
+    if (files[k] !== f) return;
+    meta[k + 'err'] = e;
+    setInfo(k, `${f.name} · 열 수 없는 영상이에요: ${e.message || e}`, 'bad');
+    report(e, `${k} 영상 열기`, f);
+  }
+  refreshAnalyzeBtn();
+}
+
+/* ---------- 문제 확인용 정보 ---------- */
+const diagLines = [];
+function report(e, where, f){
+  const line = `[${new Date().toLocaleTimeString()}] ${where}: ${e && (e.stack || e.message) || e}` +
+    (f ? `\n  파일: ${f.name} · ${f.type || '형식 미상'} · ${(f.size/1048576).toFixed(0)}MB` : '');
+  diagLines.push(line);
+  $('diagText').textContent = [`브라우저: ${navigator.userAgent}`, `WebCodecs 오디오: ${typeof AudioDecoder !== 'undefined'} · 비디오: ${typeof VideoDecoder !== 'undefined'}`, ...diagLines].join('\n');
+  $('diag').hidden = false;
+}
+$('diagCopy').addEventListener('click', () => {
+  const t = $('diagText').textContent;
+  navigator.clipboard?.writeText(t).then(() => { $('diagCopy').textContent = '복사됨'; }).catch(() => {
+    const r = document.createRange(); r.selectNodeContents($('diagText')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  });
+});
+window.addEventListener('error', e => { if (String(e.message).includes('ResizeObserver')) return; report(e.error || e.message, '예상 못한 오류'); });
+window.addEventListener('unhandledrejection', e => report(e.reason, '예상 못한 오류'));
 function nm(k){ return ($('name'+k).value.trim() || k); }
 function updateLabels(){
-  for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('exp'+k).textContent = `${nm(k)} 하이라이트 만들기`; $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
+  for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('exp'+k).textContent = `${nm(k)} 하이라이트 만들기`; $('sw'+k).textContent = `${nm(k)} 스윙만 모음`; $('hn'+k).textContent = nm(k); $('f'+k).textContent = nm(k); $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
   renderList();
 }
 
@@ -301,7 +449,7 @@ async function analyzeAudio(k, onProg){
       }
     } catch (e) { console.warn('직접 디코딩 실패, 대체 방식 사용', e); proc = null; direct = false; }
   }
-  if (!direct) proc = await decodeFallback(M, aTrack, first, duration, onProg);
+  if (!direct) { console.info('대체 디코딩 사용'); proc = await decodeFallback(M, aTrack, first, duration, onProg); }
   onProg(1);
   return { input, vTrack, aTrack, duration, env: proc.env.subarray(0, proc.n), n: proc.n, hopSec: proc.hopSec, t0: proc.t0 };
 }
@@ -397,7 +545,13 @@ function computeSync(hA, hB){
 /* ---------- 누가 쳤는지 + 랠리 묶기 ---------- */
 function buildEvents(){
   const A = cams.A, B = cams.B;
-  if (!B || !A) { const c = A || B; events = c.hits.map(h => ({ t: h.t, who: null })); return; }
+  if (!B || !A) {
+    const k = A ? 'A' : 'B', o = k === 'A' ? 'B' : 'A', c = cams[k];
+    const cut = splitByLoudness(c.hits); split = cut !== null;
+    events = c.hits.map(h => ({ t: h.t, who: split ? (h.s >= cut ? k : o) : null }));
+    return;
+  }
+  split = true;
   const off = sync.off + (+$('nudge').value || 0), d = sync.d, win = d ? d + 0.04 : 0.15;
   const hb = B.hits, used = new Uint8Array(hb.length), ev = [];
   let matched = 0, j = 0;
@@ -419,6 +573,21 @@ function buildEvents(){
   events = [];
   for (const e of ev) { const p = events[events.length-1]; if (p && e.t - p.t < 0.12) continue; events.push(e); }
   sync.match = matched / Math.max(1, Math.min(A.hits.length, hb.length));
+}
+// 카메라 한 대일 때: 가까운(내) 타구가 먼(상대) 타구보다 확실히 크면 두 무리로 나눈다
+function splitByLoudness(hits){
+  if (hits.length < 8) return null;
+  const v = hits.map(h => h.s).sort((a, b) => a - b);
+  let m1 = v[0], m2 = v[v.length-1], cut = (m1 + m2)/2;
+  for (let it = 0; it < 30; it++) {
+    let s1 = 0, n1 = 0, s2 = 0, n2 = 0;
+    for (const x of v) { if (x < cut) { s1 += x; n1++; } else { s2 += x; n2++; } }
+    if (!n1 || !n2) return null;
+    m1 = s1/n1; m2 = s2/n2; const nc = (m1 + m2)/2; if (Math.abs(nc - cut) < 0.01) break; cut = nc;
+  }
+  const lo = v.filter(x => x < cut).length, hi = v.length - lo;
+  if (m2 - m1 < 5 || lo < v.length*0.15 || hi < v.length*0.15) return null;
+  return cut;
 }
 function buildRallies(){
   const groups = []; let cur = null;
@@ -447,7 +616,7 @@ $('analyze').addEventListener('click', async () => {
     for (const k of ['A','B']) {
       cams[k] = null;
       if (!files[k]) continue;
-      $('status').textContent = `${nm(k)} 영상 소리 분석 중…`;
+      $('status').textContent = `${nm(k)} 영상 소리 분석 중… (영상 길이의 2~5% 정도 걸려요)`;
       const t = performance.now();
       cams[k] = await analyzeAudio(k, p => { $('prog'+k).style.width = (p*100).toFixed(1)+'%'; $('status').textContent = `${nm(k)} 영상 소리 분석 중… ${(p*100).toFixed(0)}%`; });
       cams[k].hits = detect(cams[k], P.sens);
@@ -455,11 +624,12 @@ $('analyze').addEventListener('click', async () => {
     }
     recompute(true);
     setupPlayers();
+    if (typeof swings !== 'undefined') { swings = []; picked.length = 0; $('poseResults').hidden = true; $('poseStatus').textContent = ''; }
     $('emptyState').hidden = true; $('results').hidden = false;
     const took = ['A','B'].filter(k => cams[k]).map(k => `${nm(k)} ${cams[k].secs.toFixed(0)}초`).join(', ');
     $('status').textContent = `분석 완료 (${took})`;
   } catch (e) {
-    console.error(e); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
+    console.error(e); report(e, '분석', null); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
   } finally { $('analyze').disabled = false; }
 });
 
@@ -486,9 +656,11 @@ function renderScore(){
   const [lo, hi] = domain();
   $('sLen').textContent = `${fmt(on.reduce((s,r) => s + r.e - r.s, 0))} / ${fmt(hi - lo)}`;
   const two = cams.A && cams.B;
-  $('sA').textContent = two ? events.filter(e => e.who === 'A').length : events.length;
-  $('sB').textContent = two ? events.filter(e => e.who === 'B').length : '–';
-  $('legBwrap').hidden = !two;
+  $('sA').textContent = split ? events.filter(e => e.who === 'A').length : events.length;
+  $('sB').textContent = split ? events.filter(e => e.who === 'B').length : '–';
+  $('legBwrap').hidden = !split;
+  if (!two) $('singleNote').textContent = split ? `카메라 1대: 소리 크기로 가까운 쪽(${nm(baseKey())})과 먼 쪽을 구분했어요. 이름 칸에 상대 이름을 적으면 표시가 바뀌어요.` : '카메라 1대: 내 타구와 상대 타구의 소리 크기 차이가 작아서 구분하지 않았어요.';
+  $('singleNote').hidden = two;
   $('syncRow').hidden = !two;
   if (two) {
     const o = sync.off;
@@ -506,7 +678,7 @@ function drawTL(){
   g.fillStyle = css('--court');
   for (const r of rallies) { g.globalAlpha = r.on ? 0.3 : 0.08; g.fillRect(x(r.s), 6, Math.max(2, x(r.e) - x(r.s)), h - 24); }
   g.globalAlpha = 1;
-  const two = cams.A && cams.B, mid = 6 + (h - 24)/2;
+  const two = split, mid = 6 + (h - 24)/2;
   for (const e of events) {
     const xx = Math.round(x(e.t)) + 0.5;
     g.strokeStyle = e.who === 'B' ? css('--pb') : css('--pa'); g.lineWidth = 1;
@@ -531,7 +703,7 @@ $('tl').addEventListener('click', ev => {
 function renderList(){
   const L = $('list'); L.innerHTML = '';
   if (!rallies.length) { L.innerHTML = '<div class="rally"><span></span><span></span><span class="t">감지된 랠리가 없어요. 감지 설정에서 감도를 올려보세요.</span></div>'; return; }
-  const two = cams.A && cams.B;
+  const two = split;
   rallies.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'rally' + (r.on ? '' : ' off');
     const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'r' + i; cb.checked = r.on; cb.setAttribute('aria-label', `랠리 ${i+1} 포함`);
@@ -563,6 +735,8 @@ function setupPlayers(){
   const two = cams.A && cams.B;
   $('viewSeg').hidden = !two;
   $('expB').hidden = !cams.B; $('expA').hidden = !cams.A;
+  $('swA').hidden = !cams.A; $('swB').hidden = !cams.B;
+  $('handRowA').hidden = !cams.A; $('handRowB').hidden = !cams.B;
   setView(two ? 'both' : baseKey());
   updateLabels();
 }
@@ -617,11 +791,20 @@ for (const k of ['A','B']) vids[k].addEventListener('timeupdate', () => {
 
 /* ---------- 내보내기 (재인코딩 없이 잘라 붙이기) ---------- */
 const made = [];
-async function exportCam(k){
+function swingSegs(k){
+  const on = rallies.filter(r => r.on), out = [];
+  for (const e of events) {
+    if (e.who !== k || !on.some(r => e.t >= r.s && e.t <= r.e)) continue;
+    const s = e.t - 1.5, en = e.t + 1.0, p = out[out.length-1];
+    if (p && s <= p.e) p.e = Math.max(p.e, en); else out.push({ s, e: en });
+  }
+  return out;
+}
+async function exportCam(k, swing){
   const M = await mb();
-  const cam = cams[k], sel = rallies.filter(r => r.on);
-  if (!sel.length) { $('xStatus').textContent = '체크된 랠리가 없어요.'; return; }
-  const btns = [$('expA'), $('expB')]; btns.forEach(b => b.disabled = true);
+  const cam = cams[k], sel = swing ? swingSegs(k) : rallies.filter(r => r.on);
+  if (!sel.length) { $('xStatus').textContent = swing ? `체크된 랠리 안에 ${nm(k)}의 타구가 없어요.` : '체크된 랠리가 없어요.'; return; }
+  const btns = [$('expA'), $('expB'), $('swA'), $('swB')]; btns.forEach(b => b.disabled = true);
   const bar = $('progX'); bar.style.width = '0'; bar.style.setProperty('--c', k === 'A' ? 'var(--pa)' : 'var(--pb)');
   try {
     const { vTrack, aTrack } = cam;
@@ -631,7 +814,7 @@ async function exportCam(k){
     const segs = sel.map(r => ({ s: Math.max(0, camTime(k, r.s)), e: Math.min(cam.duration, camTime(k, r.e)) })).filter(s => s.e - s.s > 0.3);
     if (!segs.length) throw new Error(`${nm(k)} 영상에 해당 구간이 없어요.`);
     let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
-    const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + '_highlight_' + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + (swing ? '_swings_' : '_highlight_') + new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const open = async () => {
       out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
       vs = new M.EncodedVideoPacketSource(vCodec); out.addVideoTrack(vs, { rotation });
@@ -667,17 +850,19 @@ async function exportCam(k){
       }
       outT += maxEnd - startT;
       bar.style.width = ((si + 1)/segs.length*100).toFixed(1) + '%';
-      $('xStatus').textContent = `${nm(k)} 하이라이트 만드는 중… 랠리 ${si + 1}/${segs.length}`;
+      $('xStatus').textContent = `${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 만드는 중… ${si + 1}/${segs.length}`;
       if (bytes > PART_LIMIT) await close();
     }
     if (out) await close();
-    $('xStatus').textContent = `${nm(k)} 하이라이트 완성. 아래에서 저장하세요.`;
+    $('xStatus').textContent = `${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 완성. 아래에서 저장하세요.`;
   } catch (e) {
-    console.error(e); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
+    console.error(e); report(e, '저장 파일 만들기'); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
   } finally { btns.forEach(b => b.disabled = false); }
 }
 $('expA').addEventListener('click', () => exportCam('A'));
 $('expB').addEventListener('click', () => exportCam('B'));
+$('swA').addEventListener('click', () => exportCam('A', true));
+$('swB').addEventListener('click', () => exportCam('B', true));
 
 let downloadsP = null;
 function getDownloads(){ if (!downloadsP) downloadsP = (window.claude?.use ? window.claude.use('downloads') : Promise.resolve(null)).catch(() => null); return downloadsP; }
@@ -702,6 +887,255 @@ function addFile(name, blob, secs){
   });
   row.append(s, b); $('files').prepend(row); made.push(blob);
 }
+
+/* ================= 자세 분석 ================= */
+const MP_VER = '1.0.1';
+const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
+const MODEL = { lite: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+                full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task' };
+const hands = { A: 'R', B: 'R' };
+let modelKind = 'lite', srate = 0.5, showSkel = true, flt = 'all';
+let swings = [], poseCancelled = false;
+
+function segToggle(segId, onPick){
+  $(segId).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    for (const x of $(segId).querySelectorAll('button')) x.setAttribute('aria-pressed', x === b);
+    onPick(b); });
+}
+for (const k of ['A','B']) segToggle('handRow' + k, b => { hands[k] = b.dataset.h; swings.forEach(s => { if (s.k === k) computeMetrics(s); }); renderPose(); });
+segToggle('modelSeg', b => { modelKind = b.dataset.m; poseP = null; });
+segToggle('rateSeg', b => { srate = +b.dataset.r; sv.playbackRate = srate; });
+segToggle('fltSeg', b => { flt = b.dataset.f; renderCards(); });
+$('skel').addEventListener('click', () => { showSkel = !showSkel; $('skel').setAttribute('aria-pressed', showSkel); $('skel').textContent = showSkel ? '관절선 끄기' : '관절선 켜기'; drawOverlay(); });
+
+let poseP = null;
+function getPose(){
+  if (!poseP) poseP = (async () => {
+    let mod;
+    try { mod = await import(MP_URL); } catch (e) { throw new Error('관절 인식 프로그램을 받아오지 못했어요. 인터넷 연결을 확인해 주세요. Claude 페이지에서는 막혀 있을 수 있으니 GitHub 버전에서 써주세요.'); }
+    const { FilesetResolver, PoseLandmarker } = mod;
+    const fileset = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+    const opts = d => ({ baseOptions: { modelAssetPath: MODEL[modelKind], delegate: d }, runningMode: 'VIDEO', numPoses: 2, minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.4 });
+    try { return await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+    catch (e) {
+      console.warn('GPU 실패, CPU로', e);
+      try { return await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+      catch (e2) { throw new Error('관절 인식 모델을 불러오지 못했어요. Claude 페이지에서는 모델 다운로드가 막혀 있어요. GitHub 버전에서 써주세요.'); }
+    }
+  })().catch(e => { poseP = null; throw e; });
+  return poseP;
+}
+
+function ownHits(k){
+  const on = rallies.filter(r => r.on), list = [];
+  for (const e of events) {
+    if (split ? e.who !== k : baseKey() !== k) continue;
+    if (!on.some(r => e.t >= r.s && e.t <= r.e)) continue;
+    const t = camTime(k, e.t);
+    if (t < 0.2 || t > cams[k].duration - 0.2) continue;
+    if (list.length && t - list[list.length-1] < 0.8) continue;
+    list.push(t);
+  }
+  return list;
+}
+function poseCams(){ return cams.A && cams.B ? ['A','B'] : [baseKey()]; }
+
+$('poseCancel').addEventListener('click', () => { poseCancelled = true; $('poseStatus').textContent = '멈추는 중…'; });
+$('poseGo').addEventListener('click', async () => {
+  const ks = poseCams(), jobs = ks.map(k => ({ k, hits: ownHits(k) })), total = jobs.reduce((s, j) => s + j.hits.length, 0);
+  if (!total) { $('poseStatus').textContent = '체크된 랠리 안에 분석할 타구가 없어요.'; return; }
+  $('poseGo').disabled = true; $('poseCancel').hidden = false; poseCancelled = false;
+  swings = []; picked.length = 0;
+  const bar = $('poseProg'); bar.style.width = '0';
+  try {
+    $('poseStatus').textContent = '관절 인식 모델 준비 중… (처음엔 조금 걸려요)';
+    const pose = await getPose();
+    const M = await mb();
+    $('poseResults').hidden = false;
+    let done = 0, mpTs = 0;
+    for (const { k, hits } of jobs) {
+      const sink = new M.CanvasSink(cams[k].vTrack, { width: 640, poolSize: 2 });
+      for (const hit of hits) {
+        if (poseCancelled) break;
+        const ts = [];
+        for (let t = Math.max(0, hit - 1.0); t <= Math.min(cams[k].duration - 0.02, hit + 0.5); t += 1/30) ts.push(t);
+        const sw = { k, hit, frames: [], thumb: null };
+        let prevC = null, best = null;
+        for await (const wc of sink.canvasesAtTimestamps(ts)) {
+          if (!wc) continue;
+          mpTs += 33;
+          const res = pose.detectForVideo(wc.canvas, mpTs);
+          const L = res.landmarks || res.poseLandmarks || [], W = res.worldLandmarks || res.poseWorldLandmarks || [];
+          const pi = pickPerson(L, prevC);
+          const fr = { t: wc.timestamp, lm: null, w: null };
+          if (pi >= 0) { fr.lm = L[pi].map(p => [p.x, p.y, p.visibility ?? 1]); fr.w = W[pi] ? W[pi].map(p => [p.x, p.y, p.z]) : null; prevC = center(fr.lm); }
+          sw.frames.push(fr);
+          if (!best || Math.abs(wc.timestamp - hit) < Math.abs(best.t - hit)) { best = fr; sw.thumb = makeThumb(wc.canvas, fr.lm); }
+          if (res.close) res.close();
+        }
+        mpTs += 2000;
+        computeMetrics(sw); swings.push(sw); done++;
+        bar.style.width = (done/total*100).toFixed(1) + '%';
+        $('poseStatus').textContent = `${nm(k)} 스윙 분석 중… ${done}/${total}`;
+        if (done % 3 === 0) renderPose();
+      }
+    }
+    renderPose();
+    $('poseStatus').textContent = poseCancelled ? `멈춤 · 스윙 ${swings.length}개 분석됨` : `완료 · 스윙 ${swings.length}개`;
+  } catch (e) {
+    console.error(e); report(e, '자세 분석'); $('poseStatus').textContent = '자세 분석 실패: ' + (e.message || e);
+  } finally { $('poseGo').disabled = false; $('poseCancel').hidden = true; }
+});
+
+function center(lm){ const v = lm.filter(p => p[2] > 0.4); if (!v.length) return null; return [v.reduce((s,p) => s + p[0], 0)/v.length, v.reduce((s,p) => s + p[1], 0)/v.length]; }
+function pickPerson(L, prevC){
+  let bi = -1, bs = -1;
+  L.forEach((lm, i) => {
+    const v = lm.filter(p => (p.visibility ?? 1) > 0.4); if (v.length < 8) return;
+    const xs = v.map(p => p.x), ys = v.map(p => p.y);
+    let sc = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+    if (prevC) { const cx = xs.reduce((a,b) => a+b, 0)/xs.length, cy = ys.reduce((a,b) => a+b, 0)/ys.length; sc /= 1 + 8*Math.hypot(cx - prevC[0], cy - prevC[1]); }
+    if (sc > bs) { bs = sc; bi = i; }
+  });
+  return bi;
+}
+
+const deg = r => r*180/Math.PI;
+function ang3(a, b, c){ const u = [a[0]-b[0], a[1]-b[1], a[2]-b[2]], v = [c[0]-b[0], c[1]-b[1], c[2]-b[2]]; const n = Math.hypot(...u)*Math.hypot(...v); return n ? deg(Math.acos(Math.max(-1, Math.min(1, (u[0]*v[0] + u[1]*v[1] + u[2]*v[2])/n)))) : NaN; }
+function yaw(l, r){ return deg(Math.atan2(r[2] - l[2], r[0] - l[0])); }
+function wrapD(d){ while (d > 180) d -= 360; while (d < -180) d += 360; return d; }
+const mean = a => { const v = a.filter(Number.isFinite); return v.length ? v.reduce((s,x) => s + x, 0)/v.length : NaN; };
+
+function computeMetrics(sw){
+  const F = sw.frames.filter(f => f.lm && f.w);
+  sw.m = { type: 'un', height: NaN, elbow: NaN, knee: NaN, rot: NaN, sep: NaN };
+  if (F.length < 5) return;
+  let I = 0; F.forEach((f, i) => { if (Math.abs(f.t - sw.hit) < Math.abs(F[I].t - sw.hit)) I = i; });
+  const fi = F[I], lm = fi.lm, w = fi.w;
+  const sp = idx => { let s = 0; for (let j = Math.max(1, I - 4); j <= I; j++) s += Math.hypot(F[j].lm[idx][0] - F[j-1].lm[idx][0], F[j].lm[idx][1] - F[j-1].lm[idx][1]); return s; };
+  const R = sp(16) >= sp(15);
+  const SH = R ? 12 : 11, EL = R ? 14 : 13, WR = R ? 16 : 15;
+  const cx = (lm[11][0] + lm[12][0])/2, wx = lm[WR][0], wy = lm[WR][1];
+  let type;
+  if (wy < lm[0][1] - 0.02) type = 'ov';
+  else { const right = wx > cx; type = (hands[sw.k] === 'R') === right ? 'fh' : 'bh'; }
+  const hipY = (lm[23][1] + lm[24][1])/2, shY = (lm[11][1] + lm[12][1])/2;
+  const height = (hipY - wy)/(hipY - shY);
+  const elbow = ang3(w[SH], w[EL], w[WR]);
+  const pre = F.filter(f => f.t >= sw.hit - 1.0 && f.t <= sw.hit);
+  const kv = pre.map(f => (ang3(f.w[23], f.w[25], f.w[27]) + ang3(f.w[24], f.w[26], f.w[28]))/2).filter(Number.isFinite);
+  const win = F.filter(f => f.t >= sw.hit - 1.0 && f.t <= sw.hit + 0.3);
+  let sy = win.map(f => yaw(f.w[11], f.w[12])), hy = win.map(f => yaw(f.w[23], f.w[24]));
+  const unwrap = a => { for (let i = 1; i < a.length; i++) a[i] = a[i-1] + wrapD(a[i] - a[i-1]); return a; };
+  sy = unwrap(sy); hy = unwrap(hy);
+  sw.m = { type, height, elbow, knee: kv.length ? Math.min(...kv) : NaN,
+    rot: sy.length ? Math.max(...sy) - Math.min(...sy) : NaN,
+    sep: sy.length ? Math.max(...sy.map((s, i) => Math.abs(wrapD(s - hy[i])))) : NaN, racket: WR };
+}
+
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]];
+function drawSkel(g, lm, ox, oy, w, h, racket){
+  if (!lm) return;
+  const P = i => [ox + lm[i][0]*w, oy + lm[i][1]*h];
+  g.lineCap = 'round';
+  for (const [a, b] of BONES) {
+    if (lm[a][2] < 0.3 || lm[b][2] < 0.3) continue;
+    const hot = racket && [racket, racket - 2].some(x => x === a || x === b);
+    g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 6; g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke();
+    g.strokeStyle = hot ? css('--ball') : '#ffffff'; g.lineWidth = 3; g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke();
+  }
+  for (const i of [11,12,13,14,15,16,23,24,25,26,27,28]) { if (lm[i][2] < 0.3) continue; g.fillStyle = '#fff'; g.beginPath(); g.arc(...P(i), 3.5, 0, Math.PI*2); g.fill(); }
+}
+function makeThumb(src, lm){
+  const c = document.createElement('canvas'), W = 480, H = Math.round(W * src.height / src.width);
+  c.width = W; c.height = H; const g = c.getContext('2d'); g.drawImage(src, 0, 0, W, H);
+  if (lm) drawSkel(g, lm, 0, 0, W, H, null);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+const TYPES = { fh: '포핸드', bh: '백핸드', ov: '서브·스매시', un: '알 수 없음' };
+const f0 = x => Number.isFinite(x) ? `${x.toFixed(0)}°` : '–';
+const pct = x => Number.isFinite(x) ? `${Math.round(x*100)}%` : '–';
+const ROWS = [['타점 높이', s => pct(s.m.height), s => s.m.height*100],
+              ['팔꿈치 각도', s => f0(s.m.elbow), s => s.m.elbow],
+              ['무릎 최저 각도', s => f0(s.m.knee), s => s.m.knee],
+              ['어깨 회전량', s => f0(s.m.rot), s => s.m.rot],
+              ['어깨-골반 꼬임', s => f0(s.m.sep), s => s.m.sep]];
+const picked = [];
+function renderPose(){ renderSummary(); renderCards(); renderCompare(); $('fltSeg').hidden = !(cams.A && cams.B); }
+function renderSummary(){
+  let h = '<tr><th>선수 · 종류</th><th>횟수</th>' + ROWS.map(r => `<th>${r[0]}</th>`).join('') + '</tr>';
+  for (const k of ['A','B']) for (const ty of ['fh','bh','ov','un']) {
+    const g = swings.filter(s => s.k === k && s.m.type === ty); if (!g.length) continue;
+    h += `<tr><td>${esc(nm(k))} <span class="type t-${ty}">${TYPES[ty]}</span></td><td><b>${g.length}</b></td>` +
+      ROWS.map((r, ri) => { const v = mean(g.map(r[2])); return `<td>${ri === 0 ? pct(v/100) : f0(v)}</td>`; }).join('') + '</tr>';
+  }
+  $('sumTable').innerHTML = h;
+}
+function renderCards(){
+  const C = $('cards'); C.innerHTML = '';
+  swings.forEach((s, idx) => {
+    if (flt !== 'all' && s.k !== flt) return;
+    const card = document.createElement('article'); card.className = 'card' + (picked.includes(idx) ? ' sel' : ''); card.dataset.k = s.k;
+    const img = document.createElement('img'); img.alt = `스윙 ${idx+1} 임팩트 순간`; if (s.thumb) img.src = s.thumb;
+    const body = document.createElement('div'); body.className = 'body';
+    body.innerHTML = `<div class="ttl"><b>#${idx+1}</b><span>${esc(nm(s.k))}</span><span class="type t-${s.m.type}">${TYPES[s.m.type]}</span><span>${fmt(s.hit)}</span></div>
+      <dl class="kv">${ROWS.map(r => `<dt>${r[0]}</dt><dd>${r[1](s)}</dd>`).join('')}</dl>`;
+    const row = document.createElement('div'); row.className = 'row';
+    const pb = document.createElement('button'); pb.className = 'primary'; pb.textContent = '보기'; pb.addEventListener('click', () => playSwing(idx));
+    const cb = document.createElement('button'); cb.textContent = picked.includes(idx) ? '비교 해제' : '비교'; cb.setAttribute('aria-pressed', picked.includes(idx));
+    cb.addEventListener('click', () => { const p = picked.indexOf(idx); if (p >= 0) picked.splice(p, 1); else { picked.push(idx); if (picked.length > 2) picked.shift(); } renderCards(); renderCompare(); });
+    row.append(pb, cb); body.append(row); card.append(img, body); C.append(card);
+  });
+}
+function renderCompare(){
+  const P = $('compare');
+  if (picked.length < 2) { P.hidden = true; return; }
+  const [a, b] = picked.map(i => swings[i]);
+  P.hidden = false;
+  const cap = (i, s) => `#${i+1} ${esc(nm(s.k))} ${TYPES[s.m.type]} · ${fmt(s.hit)}`;
+  P.innerHTML = `<div class="cmpgrid">
+    <figure><img src="${a.thumb}" alt="스윙 ${picked[0]+1}"><figcaption>${cap(picked[0], a)}</figcaption></figure>
+    <figure><img src="${b.thumb}" alt="스윙 ${picked[1]+1}"><figcaption>${cap(picked[1], b)}</figcaption></figure></div>
+    <div class="tablewrap"><table><tr><th>항목</th><th>#${picked[0]+1}</th><th>#${picked[1]+1}</th><th>차이</th></tr>
+    ${ROWS.map(r => { const d = r[2](b) - r[2](a); return `<tr><td>${r[0]}</td><td>${r[1](a)}</td><td>${r[1](b)}</td><td>${Number.isFinite(d) ? (d > 0 ? '+' : '') + d.toFixed(0) + (r[0] === '타점 높이' ? '%p' : '°') : '–'}</td></tr>`; }).join('')}
+    </table></div>`;
+}
+
+const sv = $('sv'), sov = $('sov');
+let scur = -1, sraf = 0;
+function playSwing(idx){
+  scur = idx; const s = swings[idx];
+  if (!urls[s.k]) urls[s.k] = URL.createObjectURL(files[s.k]);
+  const go = () => { sv.playbackRate = srate; sv.currentTime = Math.max(0, s.hit - 1.0); sv.play().catch(() => {}); cancelAnimationFrame(sraf); sloop(); };
+  if (sv.dataset.k !== s.k) { sv.dataset.k = s.k; sv.src = urls[s.k]; sv.addEventListener('loadedmetadata', go, { once: true }); sv.load(); } else go();
+  $('snow').textContent = `#${idx+1} ${nm(s.k)} ${TYPES[s.m.type]} · ${fmt(s.hit)}`;
+  sv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('replay').addEventListener('click', () => { if (scur >= 0) playSwing(scur); });
+function sloop(){
+  drawOverlay();
+  const s = swings[scur];
+  if (s && sv.currentTime >= s.hit + 0.5) { sv.pause(); drawOverlay(); return; }
+  sraf = requestAnimationFrame(sloop);
+}
+sv.addEventListener('seeked', drawOverlay);
+function drawOverlay(){
+  const r = sov.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (!r.width) return;
+  sov.width = r.width*dpr; sov.height = r.height*dpr; const g = sov.getContext('2d'); g.scale(dpr, dpr);
+  g.clearRect(0, 0, r.width, r.height);
+  const s = swings[scur]; if (!s || !showSkel || !sv.videoWidth) return;
+  const t = sv.currentTime; let best = null;
+  for (const f of s.frames) if (!best || Math.abs(f.t - t) < Math.abs(best.t - t)) best = f;
+  if (!best || Math.abs(best.t - t) > 0.06 || !best.lm) return;
+  const va = sv.videoWidth/sv.videoHeight, ra = r.width/r.height;
+  const w = va > ra ? r.width : r.height*va, h = va > ra ? r.width/va : r.height;
+  drawSkel(g, best.lm, (r.width - w)/2, (r.height - h)/2, w, h, s.m.racket);
+  if (Math.abs(t - s.hit) < 0.05) { g.fillStyle = css('--ball'); g.font = '600 15px "Barlow Condensed", sans-serif'; g.fillText('IMPACT', 10, 22); }
+}
+window.addEventListener('resize', drawOverlay);
+
 </script>
 
 </body>
