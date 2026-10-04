@@ -311,7 +311,64 @@ async function mb(){ if (!MB) { try { MB = await import(MB_URL); } catch (e) { t
 
 const $ = id => document.getElementById(id);
 const fmt = s => { s = Math.max(0, s); const m = Math.floor(s/60), ss = Math.floor(s%60); const h = Math.floor(m/60); return h ? `${h}:${String(m%60).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${m}:${String(ss).padStart(2,'0')}`; };
-const PART_LIMIT = 300 * 1024 * 1024;
+let PART_LIMIT = 150 * 1024 * 1024;        // 메모리에 들고 있을 때(대체 방식)
+const DISK_PART_LIMIT = 1500 * 1024 * 1024; // 저장공간에 바로 쓸 때
+
+/* ---------- 폰 저장공간(OPFS)에 바로 쓰기: 워커에서 동기 쓰기 ---------- */
+const OPFS_PREFIX = 'rallycut_';
+const workerSrc = `
+let h = null;
+onmessage = async e => {
+  const m = e.data;
+  try {
+    if (m.op === 'open') {
+      const root = await navigator.storage.getDirectory();
+      const fh = await root.getFileHandle(m.name, { create: true });
+      h = await fh.createSyncAccessHandle(); h.truncate(0);
+    } else if (m.op === 'write') {
+      h.write(new Uint8Array(m.data), { at: m.pos });
+    } else if (m.op === 'close') {
+      h.flush(); h.close(); h = null;
+    }
+    postMessage({ id: m.id });
+  } catch (err) { postMessage({ id: m.id, err: String(err && err.message || err) }); }
+};`;
+let opfsWorker = null, opfsOK = null, rpcId = 0;
+const rpcWait = new Map();
+function rpc(msg, transfer){
+  return new Promise((res, rej) => { const id = ++rpcId; rpcWait.set(id, { res, rej }); opfsWorker.postMessage({ ...msg, id }, transfer || []); });
+}
+async function opfsReady(){
+  if (opfsOK !== null) return opfsOK;
+  try {
+    if (!navigator.storage?.getDirectory || typeof Worker === 'undefined') throw new Error('지원 안 함');
+    opfsWorker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })));
+    opfsWorker.onmessage = e => { const w = rpcWait.get(e.data.id); if (!w) return; rpcWait.delete(e.data.id); e.data.err ? w.rej(new Error(e.data.err)) : w.res(); };
+    await rpc({ op: 'open', name: OPFS_PREFIX + 'probe.tmp' }); await rpc({ op: 'close' });
+    opfsOK = true;
+  } catch (e) { console.warn('저장공간 쓰기 불가, 메모리 방식 사용', e); opfsOK = false; }
+  return opfsOK;
+}
+// 지난번에 만든 임시 파일 정리
+(async () => { try { const root = await navigator.storage.getDirectory(); for await (const [name] of root.entries()) if (name.startsWith(OPFS_PREFIX)) await root.removeEntry(name); } catch {} })();
+function diskSink(name){
+  let opened = null;
+  const stream = new WritableStream({
+    async write(chunk){
+      if (!opened) opened = rpc({ op: 'open', name });
+      await opened;
+      const buf = chunk.data.slice().buffer; // 복사본을 워커로 넘기고 여기서는 바로 버림
+      await rpc({ op: 'write', data: buf, pos: chunk.position }, [buf]);
+    }
+  });
+  return { stream, async result(){
+    if (!opened) opened = rpc({ op: 'open', name });
+    await opened; await rpc({ op: 'close' });
+    const root = await navigator.storage.getDirectory();
+    const f = await (await root.getFileHandle(name)).getFile();
+    return new File([f], name.slice(OPFS_PREFIX.length), { type: 'video/mp4' });
+  } };
+}
 // 출력 파일을 4MB 조각 Blob으로 바로바로 넘겨서, 메모리에 큰 덩어리가 쌓이지 않게 한다.
 // (MP4 머리 부분을 나중에 고쳐 쓰는 경우는 patches로 모아 두었다가 마지막에 잘라 붙인다)
 function blobSink(){
@@ -326,7 +383,7 @@ function blobSink(){
     patches.push({ pos: p, len: over, blob: new Blob([d.subarray(0, over)]) });
     if (over < d.byteLength) { parts.push(new Blob([d.subarray(over)])); end += d.byteLength - over; }
   }});
-  return { stream, result(){
+  return { stream, async result(){
     let b = new Blob(parts, { type: 'video/mp4' });
     for (const q of patches) b = new Blob([b.slice(0, q.pos), q.blob, b.slice(q.pos + q.len)], { type: 'video/mp4' });
     return b;
@@ -894,8 +951,11 @@ async function exportCam(k, swing){
     let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
     const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + (swing ? '_swings_' : '_highlight_') + new Date().toISOString().slice(0, 10).replace(/-/g, '');
     let sink = null;
+    const disk = await opfsReady();
+    const limit = disk ? DISK_PART_LIMIT : PART_LIMIT;
+    if (!disk) report('폰 저장공간에 바로 쓰기를 쓸 수 없어 메모리 방식으로 저장해요. 긴 하이라이트는 여러 파일로 나뉘어요.', '저장 방식');
     const open = async () => {
-      sink = blobSink();
+      sink = disk ? diskSink(`${OPFS_PREFIX}${base}_${part + 1}_${Date.now()}.mp4`) : blobSink();
       out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: false }), target: new M.StreamTarget(sink.stream, { chunked: true, chunkSize: 4 * 2**20 }) });
       vs = new M.EncodedVideoPacketSource(vCodec); out.addVideoTrack(vs, { rotation });
       if (aTrack) { as = new M.EncodedAudioPacketSource(aCodec); out.addAudioTrack(as); }
@@ -903,7 +963,7 @@ async function exportCam(k, swing){
     };
     const close = async () => {
       vs.close(); if (as) as.close(); await out.finalize();
-      part++; addFile(`${base}_${part}.mp4`, sink.result(), outT); out = null; sink = null;
+      part++; const file = await sink.result(); addFile(`${base}_${part}.mp4`, file, outT); out = null; sink = null;
     };
     const label = swing ? '스윙 모음' : '하이라이트';
     for (let si = 0; si < segs.length; si++) {
@@ -946,7 +1006,7 @@ async function exportCam(k, swing){
       } finally { if (aIt) await aIt.return?.(); }
       outT += maxEnd - startT;
       bar.style.width = ((si + 1)/segs.length*100).toFixed(1) + '%';
-      if (bytes > PART_LIMIT) { trace(`${nm(k)} ${label} 파일 마무리 중`); await close(); }
+      if (bytes > limit) { trace(`${nm(k)} ${label} 파일 마무리 중`); await close(); }
     }
     trace(`${nm(k)} ${label} 파일 마무리 중`);
     if (out) await close();
