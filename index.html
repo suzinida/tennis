@@ -311,7 +311,27 @@ async function mb(){ if (!MB) { try { MB = await import(MB_URL); } catch (e) { t
 
 const $ = id => document.getElementById(id);
 const fmt = s => { s = Math.max(0, s); const m = Math.floor(s/60), ss = Math.floor(s%60); const h = Math.floor(m/60); return h ? `${h}:${String(m%60).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${m}:${String(ss).padStart(2,'0')}`; };
-const PART_LIMIT = 450 * 1024 * 1024;
+const PART_LIMIT = 300 * 1024 * 1024;
+// 출력 파일을 4MB 조각 Blob으로 바로바로 넘겨서, 메모리에 큰 덩어리가 쌓이지 않게 한다.
+// (MP4 머리 부분을 나중에 고쳐 쓰는 경우는 patches로 모아 두었다가 마지막에 잘라 붙인다)
+function blobSink(){
+  const parts = [], patches = []; let end = 0;
+  const stream = new WritableStream({ write(chunk){
+    const d = chunk.data, p = chunk.position;
+    if (p >= end) {
+      if (p > end) { parts.push(new Blob([new Uint8Array(p - end)])); end = p; }
+      parts.push(new Blob([d])); end += d.byteLength; return;
+    }
+    const over = Math.min(d.byteLength, end - p);
+    patches.push({ pos: p, len: over, blob: new Blob([d.subarray(0, over)]) });
+    if (over < d.byteLength) { parts.push(new Blob([d.subarray(over)])); end += d.byteLength - over; }
+  }});
+  return { stream, result(){
+    let b = new Blob(parts, { type: 'video/mp4' });
+    for (const q of patches) b = new Blob([b.slice(0, q.pos), q.blob, b.slice(q.pos + q.len)], { type: 'video/mp4' });
+    return b;
+  } };
+}
 
 const cams = { A: null, B: null };
 const files = { A: null, B: null };
@@ -411,6 +431,18 @@ async function probe(k, f){
   refreshAnalyzeBtn();
 }
 
+/* ---------- 페이지가 강제로 다시 시작돼도 마지막 단계를 기억 ---------- */
+const TRACE_KEY = 'rallycut_trace';
+function trace(msg){ try { localStorage.setItem(TRACE_KEY, JSON.stringify({ msg, at: Date.now() })); } catch {} }
+function clearTrace(){ try { localStorage.removeItem(TRACE_KEY); } catch {} }
+// 저장하는 동안 미리보기 영상들이 쥐고 있는 메모리를 놓아준다
+function releaseVideos(){
+  for (const el of [vids.A, vids.B, $('peekA'), $('peekB'), $('sv')]) { try { el.pause(); if (el.getAttribute('src')) { el.dataset.src = el.getAttribute('src'); el.removeAttribute('src'); el.load(); } } catch {} }
+}
+function restoreVideos(){
+  for (const el of [vids.A, vids.B, $('peekA'), $('peekB'), $('sv')]) { try { if (el.dataset.src && !el.getAttribute('src')) { el.src = el.dataset.src; } delete el.dataset.src; } catch {} }
+}
+
 /* ---------- 문제 확인용 정보 ---------- */
 const diagLines = [];
 function report(e, where, f){
@@ -428,6 +460,11 @@ $('diagCopy').addEventListener('click', () => {
 });
 window.addEventListener('error', e => { if (String(e.message).includes('ResizeObserver')) return; report(e.error || e.message, '예상 못한 오류'); });
 window.addEventListener('unhandledrejection', e => report(e.reason, '예상 못한 오류'));
+try {
+  const last = JSON.parse(localStorage.getItem(TRACE_KEY) || 'null');
+  if (last && Date.now() - last.at < 60*60*1000) report(`작업 중에 페이지가 다시 시작됐어요(메모리 부족 가능성). 마지막 단계: ${last.msg}`, '지난 실행');
+  clearTrace();
+} catch {}
 function nm(k){ return ($('name'+k).value.trim() || k); }
 function updateLabels(){
   for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('exp'+k).textContent = `${nm(k)} 하이라이트 만들기`; $('sw'+k).textContent = `${nm(k)} 스윙만 모음`; $('hn'+k).textContent = nm(k); $('f'+k).textContent = nm(k); $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
@@ -655,7 +692,8 @@ $('analyze').addEventListener('click', async () => {
       if (!files[k]) continue;
       $('status').textContent = `${nm(k)} 영상 소리 분석 중… (영상 길이의 2~5% 정도 걸려요)`;
       const t = performance.now();
-      cams[k] = await analyzeAudio(k, p => { $('prog'+k).style.width = (p*100).toFixed(1)+'%'; $('status').textContent = `${nm(k)} 영상 소리 분석 중… ${(p*100).toFixed(0)}%`; });
+      trace(`${nm(k)} 영상 소리 분석 시작`);
+      cams[k] = await analyzeAudio(k, p => { $('prog'+k).style.width = (p*100).toFixed(1)+'%'; if (Math.round(p*100) % 10 === 0) trace(`${nm(k)} 영상 소리 분석 ${(p*100).toFixed(0)}%`); $('status').textContent = `${nm(k)} 영상 소리 분석 중… ${(p*100).toFixed(0)}%`; });
       cams[k].hits = detect(cams[k], P.sens);
       cams[k].secs = (performance.now() - t)/1000;
     }
@@ -664,9 +702,9 @@ $('analyze').addEventListener('click', async () => {
     if (typeof swings !== 'undefined') { swings = []; picked.length = 0; $('poseResults').hidden = true; $('poseStatus').textContent = ''; }
     $('emptyState').hidden = true; $('results').hidden = false;
     const took = ['A','B'].filter(k => cams[k]).map(k => `${nm(k)} ${cams[k].secs.toFixed(0)}초`).join(', ');
-    $('status').textContent = `분석 완료 (${took})`;
+    $('status').textContent = `분석 완료 (${took})`; clearTrace();
   } catch (e) {
-    console.error(e); report(e, '분석', null); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
+    console.error(e); clearTrace(); report(e, '분석', null); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
   } finally { $('analyze').disabled = false; }
 });
 
@@ -842,6 +880,9 @@ async function exportCam(k, swing){
   const cam = cams[k], sel = swing ? swingSegs(k) : rallies.filter(r => r.on);
   if (!sel.length) { $('xStatus').textContent = swing ? `체크된 랠리 안에 ${nm(k)}의 타구가 없어요.` : '체크된 랠리가 없어요.'; return; }
   const btns = [$('expA'), $('expB'), $('swA'), $('swB')]; btns.forEach(b => b.disabled = true);
+  stopPlay(); releaseVideos();
+  trace(`${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 준비`);
+  $('xStatus').textContent = '준비 중…';
   const bar = $('progX'); bar.style.width = '0'; bar.style.setProperty('--c', k === 'A' ? 'var(--pa)' : 'var(--pb)');
   try {
     const { vTrack, aTrack } = cam;
@@ -852,49 +893,68 @@ async function exportCam(k, swing){
     if (!segs.length) throw new Error(`${nm(k)} 영상에 해당 구간이 없어요.`);
     let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
     const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + (swing ? '_swings_' : '_highlight_') + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    let sink = null;
     const open = async () => {
-      out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
+      sink = blobSink();
+      out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: false }), target: new M.StreamTarget(sink.stream, { chunked: true, chunkSize: 4 * 2**20 }) });
       vs = new M.EncodedVideoPacketSource(vCodec); out.addVideoTrack(vs, { rotation });
       if (aTrack) { as = new M.EncodedAudioPacketSource(aCodec); out.addAudioTrack(as); }
       await out.start(); outT = 0; bytes = 0; firstV = true; firstA = true;
     };
     const close = async () => {
       vs.close(); if (as) as.close(); await out.finalize();
-      part++; const blob = new Blob([out.target.buffer], { type: 'video/mp4' });
-      addFile(`${base}_${part}.mp4`, blob, outT); out = null;
+      part++; addFile(`${base}_${part}.mp4`, sink.result(), outT); out = null; sink = null;
     };
+    const label = swing ? '스윙 모음' : '하이라이트';
     for (let si = 0; si < segs.length; si++) {
       const seg = segs[si];
+      trace(`${nm(k)} ${label} ${si + 1}/${segs.length}번째 구간 시작 (${fmt(seg.s)}~${fmt(seg.e)})`);
+      $('xStatus').textContent = `${nm(k)} ${label} 만드는 중… ${si + 1}/${segs.length}`;
       if (!out) await open();
       const key = (await vSink.getKeyPacket(seg.s, { verifyKeyPackets: true })) || (await vSink.getFirstKeyPacket());
       const startT = key.timestamp;
-      const lastP = await vSink.getPacket(seg.e);
-      const endKey = lastP ? await vSink.getNextKeyPacket(lastP) : null;
-      let maxEnd = startT;
-      for await (const p of vSink.packets(key, endKey || undefined)) {
-        if (p.timestamp < startT - 1e-6) continue;
-        await vs.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstV ? { decoderConfig: vCfg } : undefined); firstV = false;
-        maxEnd = Math.max(maxEnd, p.timestamp + p.duration); bytes += p.data.byteLength;
-      }
-      if (aSink) {
-        const a0 = await aSink.getPacket(startT) || await aSink.getFirstPacket();
-        const aEnd = await aSink.getPacket(maxEnd);
-        for await (const p of aSink.packets(a0, aEnd && aEnd.timestamp > a0.timestamp ? aEnd : undefined)) {
-          if (p.timestamp < startT - 1e-6) continue; if (p.timestamp >= maxEnd) break;
-          await as.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstA ? { decoderConfig: aCfg } : undefined); firstA = false;
-          bytes += p.data.byteLength;
+      // 오디오는 영상과 번갈아 넣어서 내부 버퍼가 쌓이지 않게 한다
+      let aIt = null, aNext = null;
+      if (aSink) { const a0 = await aSink.getPacket(startT) || await aSink.getFirstPacket(); aIt = aSink.packets(a0); aNext = (await aIt.next()).value; }
+      const pumpAudio = async upto => {
+        while (aNext && aNext.timestamp < upto) {
+          if (aNext.timestamp >= startT - 1e-6) {
+            await as.add(aNext.clone({ timestamp: aNext.timestamp - startT + outT }), firstA ? { decoderConfig: aCfg } : undefined); firstA = false;
+            bytes += aNext.data.byteLength;
+          }
+          aNext = (await aIt.next()).value;
         }
-      }
+      };
+      let maxEnd = startT, n = 0, segBytes = 0;
+      const vIt = vSink.packets(key);
+      try {
+        for await (const p of vIt) {
+          // 구간 끝을 지난 첫 키프레임에서 멈춤 (안전장치: 끝+3초를 넘으면 무조건 멈춤)
+          if ((p.type === 'key' && p.timestamp >= seg.e && n > 0) || p.timestamp > seg.e + 3) break;
+          if (p.timestamp < startT - 1e-6) continue;
+          if (aIt) await pumpAudio(p.timestamp);
+          await vs.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstV ? { decoderConfig: vCfg } : undefined); firstV = false;
+          maxEnd = Math.max(maxEnd, p.timestamp + p.duration); bytes += p.data.byteLength; segBytes += p.data.byteLength; n++;
+          if (n % 30 === 0) {
+            const frac = Math.min(1, (p.timestamp - startT)/Math.max(0.1, seg.e - startT));
+            bar.style.width = ((si + frac)/segs.length*100).toFixed(1) + '%';
+            if (n % 120 === 0) trace(`${nm(k)} ${label} ${si + 1}/${segs.length}번째 구간 ${(p.timestamp - startT).toFixed(0)}초 지점`);
+          }
+          if (segBytes > 400 * 2**20) throw new Error('한 구간이 너무 커요(400MB 초과). 영상 형식을 확인해 주세요.');
+        }
+        if (aIt) await pumpAudio(maxEnd);
+      } finally { if (aIt) await aIt.return?.(); }
       outT += maxEnd - startT;
       bar.style.width = ((si + 1)/segs.length*100).toFixed(1) + '%';
-      $('xStatus').textContent = `${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 만드는 중… ${si + 1}/${segs.length}`;
-      if (bytes > PART_LIMIT) await close();
+      if (bytes > PART_LIMIT) { trace(`${nm(k)} ${label} 파일 마무리 중`); await close(); }
     }
+    trace(`${nm(k)} ${label} 파일 마무리 중`);
     if (out) await close();
-    $('xStatus').textContent = `${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 완성. 아래에서 저장하세요.`;
+    clearTrace();
+    $('xStatus').textContent = `${nm(k)} ${label} 완성. 아래에서 저장하세요.`;
   } catch (e) {
-    console.error(e); report(e, '저장 파일 만들기'); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
-  } finally { btns.forEach(b => b.disabled = false); }
+    console.error(e); clearTrace(); report(e, '저장 파일 만들기'); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
+  } finally { btns.forEach(b => b.disabled = false); restoreVideos(); }
 }
 $('expA').addEventListener('click', () => exportCam('A'));
 $('expB').addEventListener('click', () => exportCam('B'));
@@ -1011,13 +1071,13 @@ $('poseGo').addEventListener('click', async () => {
           if (res.close) res.close();
         }
         mpTs += 2000;
-        computeMetrics(sw); swings.push(sw); done++;
+        computeMetrics(sw); swings.push(sw); done++; trace(`자세 분석 ${done}/${total}`);
         bar.style.width = (done/total*100).toFixed(1) + '%';
         $('poseStatus').textContent = `${nm(k)} 스윙 분석 중… ${done}/${total}`;
         if (done % 3 === 0) renderPose();
       }
     }
-    renderPose();
+    renderPose(); clearTrace();
     $('poseStatus').textContent = poseCancelled ? `멈춤 · 스윙 ${swings.length}개 분석됨` : `완료 · 스윙 ${swings.length}개`;
   } catch (e) {
     console.error(e); report(e, '자세 분석'); $('poseStatus').textContent = '자세 분석 실패: ' + (e.message || e);
