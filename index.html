@@ -130,7 +130,8 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
 .cmpgrid figcaption{font-size:.85rem;color:var(--muted)}
 .handrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.88rem}
 .handrow .badge{--c:var(--pa)} #handRowB .badge{--c:var(--pb)}
-.peek{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px;display:block;max-width:100%}
+.peek{width:100%;max-width:420px;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px;display:block;max-width:100%}
+body.dragging .slot{outline:2px dashed var(--court);outline-offset:4px}
 .file.ok{color:var(--ink)} .file.bad{color:var(--warn)}
 #diag pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;margin:0;color:var(--muted);max-height:240px;overflow:auto}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -166,7 +167,7 @@ td b{font-family:var(--display);font-size:1.15rem;font-weight:700}
         <span class="status" id="status">영상을 고르면 시작할 수 있어요.</span>
       </div>
       <p class="hint">영상은 이 기기 안에서만 처리되고 어디에도 올라가지 않아요.</p>
-      <p class="hint"><b>긴 영상은 '파일' 앱에서 고르세요.</b> 사진 보관함에서 고르면 iPhone이 영상을 먼저 변환하느라 몇 분씩 아무 반응이 없거나 실패할 수 있어요. 사진 앱에서 영상 → 공유 → '파일에 저장'을 한 뒤, 영상 고르기에서 '파일 선택'(또는 '찾아보기')으로 넣으면 바로 들어가요.</p>
+      <p class="hint">PC 크롬이나 엣지에서 쓰는 걸 추천해요. 영상 파일을 이 화면에 끌어다 놓아도 돼요.</p>
     </div>
     <div class="panel" id="diag" hidden>
       <div class="row" style="justify-content:space-between"><b>문제 확인용 정보</b><button id="diagCopy">복사</button></div>
@@ -312,7 +313,7 @@ async function opfsReady(){
 }
 // 지난번에 만든 임시 파일 정리
 (async () => { try { const root = await navigator.storage.getDirectory(); for await (const [name] of root.entries()) if (name.startsWith(OPFS_PREFIX)) await root.removeEntry(name); } catch {} })();
-function diskSink(name){
+function diskSink(name, outName){
   let opened = null;
   const stream = new WritableStream({
     async write(chunk){
@@ -327,11 +328,28 @@ function diskSink(name){
     await opened; await rpc({ op: 'close' });
     const root = await navigator.storage.getDirectory();
     const f = await (await root.getFileHandle(name)).getFile();
-    return new File([f], name.slice(OPFS_PREFIX.length), { type: 'video/mp4' });
+    return new File([f], outName, { type: 'video/mp4' });
   } };
 }
 // 출력 파일을 4MB 조각 Blob으로 바로바로 넘겨서, 메모리에 큰 덩어리가 쌓이지 않게 한다.
 // (MP4 머리 부분을 나중에 고쳐 쓰는 경우는 patches로 모아 두었다가 마지막에 잘라 붙인다)
+// HEVC: 이어 붙이는 구간의 첫 키프레임이 CRA면 BLA로 바꿔 '새 영상 시작'으로 표시한다.
+// (CRA를 그대로 이으면 프레임 번호(POC)가 겹쳐 이음새에서 프레임이 뒤섞이거나 빠짐)
+function hevcNalLen(desc){
+  const d = desc instanceof Uint8Array ? desc : new Uint8Array(desc.buffer ? desc.buffer.slice(desc.byteOffset, desc.byteOffset + desc.byteLength) : desc);
+  return d.length > 21 ? (d[21] & 3) + 1 : 4;
+}
+function hevcCraToBla(src, L){
+  let out = null;
+  for (let i = 0; i + L <= src.length;) {
+    let n = 0; for (let j = 0; j < L; j++) n = n * 256 + src[i + j];
+    const h = i + L; if (n <= 0 || h + n > src.length) break;
+    const type = (src[h] >> 1) & 0x3f;
+    if (type === 21) { if (!out) out = src.slice(); out[h] = (out[h] & 0x81) | (16 << 1); }
+    i = h + n;
+  }
+  return out;
+}
 function blobSink(){
   const parts = [], patches = []; let end = 0;
   const stream = new WritableStream({ write(chunk){
@@ -405,6 +423,17 @@ for (const k of ['A','B']) {
   $('name'+k).addEventListener('input', updateLabels);
 }
 window.addEventListener('focus', checkReturn);
+// PC: 영상 파일을 화면에 끌어다 놓기
+window.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); document.body.classList.add('dragging'); } });
+window.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
+window.addEventListener('drop', e => {
+  document.body.classList.remove('dragging');
+  const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('video/') || /\.(mp4|mov|m4v)$/i.test(x.name));
+  if (!f) return;
+  e.preventDefault();
+  try { const dt = new DataTransfer(); dt.items.add(f); $('fileA').files = dt.files; } catch {}
+  if (!handlePick('A')) { files.A = null; $('fileA').value = ''; try { const dt = new DataTransfer(); dt.items.add(f); $('fileA').files = dt.files; } catch {} handlePick('A'); }
+});
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReturn(); });
 const meta = { A: null, B: null };
 function setInfo(k, text, cls){ const el = $('info'+k); el.textContent = text; el.className = 'file' + (cls ? ' ' + cls : ''); }
@@ -762,7 +791,7 @@ $('analyze').addEventListener('click', async () => {
     recompute(true);
     setupPlayers();
     $('emptyState').hidden = true; $('results').hidden = false;
-    const took = ['A','B'].filter(k => cams[k]).map(k => `${nm(k)} ${cams[k].secs.toFixed(0)}초`).join(', ');
+    const took = ['A','B'].filter(k => cams[k]).map(k => `${cams[k].secs.toFixed(0)}초`).join(', ');
     $('status').textContent = `분석 완료 (${took})`; clearTrace();
   } catch (e) {
     console.error(e); clearTrace(); report(e, '분석', null); $('status').innerHTML = ''; const s = document.createElement('span'); s.className = 'err'; s.textContent = '분석 실패: ' + (e.message || e); $('status').append(s);
@@ -875,7 +904,7 @@ function setupPlayers(){
     if (urls[k]) URL.revokeObjectURL(urls[k]);
     if (cams[k]) { urls[k] = URL.createObjectURL(files[k]); vids[k].src = urls[k]; }
     else { vids[k].removeAttribute('src'); vids[k].load(); }
-    vids[k].onerror = () => { $('vidErr').hidden = false; $('vidErr').textContent = '이 화면에서는 영상 미리보기가 막혀 있어요. 분석과 저장은 그대로 쓸 수 있어요.'; };
+    vids[k].onerror = () => { $('vidErr').hidden = false; $('vidErr').textContent = '이 컴퓨터의 브라우저가 이 영상 형식(아이폰 HEVC)을 재생하지 못해서 미리보기가 안 돼요. 랠리 분석과 하이라이트 저장은 그대로 돼요. 저장한 파일은 윈도우 기본 앱이나 VLC로 보면 돼요.'; };
   }
   const two = cams.A && cams.B;
   $('viewSeg').hidden = !two;
@@ -958,16 +987,19 @@ async function exportCam(k, swing){
     const vSink = new M.EncodedPacketSink(vTrack), aSink = aTrack ? new M.EncodedPacketSink(aTrack) : null;
     const vCfg = await vTrack.getDecoderConfig(), vCodec = await vTrack.getCodec(), rotation = await vTrack.getRotation();
     const aCfg = aTrack ? await aTrack.getDecoderConfig() : null, aCodec = aTrack ? await aTrack.getCodec() : null;
+    const nalLen = vCodec === 'hevc' && vCfg.description ? hevcNalLen(vCfg.description) : 4;
     const segs = sel.map(r => ({ s: Math.max(0, camTime(k, r.s)), e: Math.min(cam.duration, camTime(k, r.e)) })).filter(s => s.e - s.s > 0.3);
     if (!segs.length) throw new Error(`${nm(k)} 영상에 해당 구간이 없어요.`);
     let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
-    const base = (nm(k).replace(/[^\w가-힣-]/g, '') || k) + (swing ? '_swings_' : '_highlight_') + new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const stem = (files[k].name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '').trim() || 'tennis');
+    const base = `${stem}_${swing ? 'hits' : 'highlight'}`;
     let sink = null;
     const disk = await opfsReady();
     const limit = disk ? DISK_PART_LIMIT : PART_LIMIT;
     if (!disk) report('폰 저장공간에 바로 쓰기를 쓸 수 없어 메모리 방식으로 저장해요. 긴 하이라이트는 여러 파일로 나뉘어요.', '저장 방식');
     const open = async () => {
-      sink = disk ? diskSink(`${OPFS_PREFIX}${base}_${part + 1}_${Date.now()}.mp4`) : blobSink();
+      const outName = `${base}${part ? '_' + (part + 1) : ''}.mp4`;
+      sink = disk ? diskSink(`${OPFS_PREFIX}out_${Date.now()}_${part + 1}.mp4`, outName) : blobSink();
       out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: false }), target: new M.StreamTarget(sink.stream, { chunked: true, chunkSize: 4 * 2**20 }) });
       vs = new M.EncodedVideoPacketSource(vCodec); out.addVideoTrack(vs, { rotation });
       if (aTrack) { as = new M.EncodedAudioPacketSource(aCodec); out.addAudioTrack(as); }
@@ -975,7 +1007,8 @@ async function exportCam(k, swing){
     };
     const close = async () => {
       vs.close(); if (as) as.close(); await out.finalize();
-      part++; const file = await sink.result(); addFile(`${base}_${part}.mp4`, file, outT); out = null; sink = null;
+      const outName = `${base}${part ? '_' + (part + 1) : ''}.mp4`;
+      part++; const file = await sink.result(); addFile(outName, file, outT); out = null; sink = null;
     };
     const label = swing ? '스윙 모음' : '하이라이트';
     for (let si = 0; si < segs.length; si++) {
@@ -1005,7 +1038,9 @@ async function exportCam(k, swing){
           if ((p.type === 'key' && p.timestamp >= seg.e && n > 0) || p.timestamp > seg.e + 3) break;
           if (p.timestamp < startT - 1e-6) continue;
           if (aIt) await pumpAudio(p.timestamp);
-          await vs.add(p.clone({ timestamp: p.timestamp - startT + outT }), firstV ? { decoderConfig: vCfg } : undefined); firstV = false;
+          const isStart = n === 0 && p.type === 'key';
+          const data = isStart && vCodec === 'hevc' ? hevcCraToBla(p.data, nalLen) : undefined;
+          await vs.add(p.clone(data ? { data, timestamp: p.timestamp - startT + outT } : { timestamp: p.timestamp - startT + outT }), firstV ? { decoderConfig: vCfg } : undefined); firstV = false;
           maxEnd = Math.max(maxEnd, p.timestamp + p.duration); bytes += p.data.byteLength; segBytes += p.data.byteLength; n++;
           if (n % 30 === 0) {
             const frac = Math.min(1, (p.timestamp - startT)/Math.max(0.1, seg.e - startT));
@@ -1023,7 +1058,7 @@ async function exportCam(k, swing){
     trace(`${nm(k)} ${label} 파일 마무리 중`);
     if (out) await close();
     clearTrace();
-    $('xStatus').textContent = `${nm(k)} ${label} 완성. 아래에서 저장하세요.`;
+    $('xStatus').textContent = `${label} 완성. 아래 '저장'을 누르면 다운로드 폴더에 저장돼요.`;
   } catch (e) {
     console.error(e); clearTrace(); report(e, '저장 파일 만들기'); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
   } finally { btns.forEach(b => b.disabled = false); restoreVideos(); }
@@ -1046,12 +1081,14 @@ function addFile(name, blob, secs){
       catch (e) { b.textContent = e?.code === 'declined' ? '저장' : '다시 시도'; if (e?.code && e.code !== 'declined') $('xStatus').textContent = '저장 실패: ' + (e.message || e.code); }
     } else {
       const file = new File([blob], name, { type: 'video/mp4' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      const mobile = navigator.userAgentData?.mobile ?? /iPhone|iPad|Android/i.test(navigator.userAgent);
+      if (mobile && navigator.canShare && navigator.canShare({ files: [file] })) {
         try { await navigator.share({ files: [file] }); b.textContent = '저장됨'; return; }
         catch (e) { if (e?.name === 'AbortError') return; }
       }
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      setTimeout(() => URL.revokeObjectURL(a.href), 120000);
+      b.textContent = '다시 저장';
     }
   });
   row.append(s, b); $('files').prepend(row); made.push(blob);
