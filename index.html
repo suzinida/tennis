@@ -89,6 +89,12 @@ input[type=range]{width:100%;accent-color:var(--court)}
 .rally .no{font-family:var(--display);font-weight:700;font-size:1.1rem;width:2.2em;font-variant-numeric:tabular-nums}
 .rally .t{font-variant-numeric:tabular-nums;font-size:.9rem;min-width:0}
 .rally .t small{color:var(--muted);display:block;font-size:.78rem}
+.opt{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:0;display:flex;flex-direction:column;gap:6px}
+.opt legend{font-weight:600;padding:0 6px;font-size:.88rem}
+.opt label{display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer}
+.opt input[type=radio]{accent-color:var(--court);width:18px;height:18px;margin:0}
+.opt .sub{color:var(--muted);font-size:.84rem}
+.opt select{font:inherit;padding:2px 6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .chip.cs{color:var(--court)} .chip.cm{color:var(--muted)} .chip.cw{color:var(--warn);border-style:dashed}
 .chip{font-size:.75rem;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid currentColor;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -248,15 +254,25 @@ body.dragging .slot{outline:2px dashed var(--court);outline-offset:4px}
     <section>
       <h2>4 · 저장</h2>
       <div class="panel">
-        <p class="hint">하이라이트는 체크된 랠리 전체를, 타구만 모음은 그 안에서 가까운 쪽 선수가 친 순간 앞 1.5초~뒤 1초만 모아요. 둘 다 원본 화질 그대로 잘라 붙여요(재인코딩 없음). 구간 시작이 키프레임에 맞춰지느라 앞뒤가 1초 정도 더 붙을 수 있어요. 파일이 크면 여러 개로 나눠 저장됩니다.</p>
+        <fieldset class="opt">
+          <legend>어떤 랠리를 넣을까요</legend>
+          <label><input type="radio" name="which" id="whAll" value="all" checked> 체크된 랠리 전부 <span class="sub" id="whAllInfo"></span></label>
+          <label><input type="radio" name="which" id="whLong" value="long"> 긴 랠리만: 왕복
+            <select id="rtMin" aria-label="최소 왕복 횟수"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>번 이상 <span class="sub" id="whLongInfo"></span></label>
+        </fieldset>
+        <fieldset class="opt">
+          <legend>화질</legend>
+          <label><input type="radio" name="qual" id="qOrig" value="orig" checked> 원본 화질 <span class="sub">가장 빠르고 화질 그대로, 용량이 커요</span></label>
+          <label><input type="radio" name="qual" id="qKakao" value="kakao"> 카톡 전송용 <span class="sub">720p · 30fps로 줄여서 파일마다 300MB 이하, 되도록 1~2개 파일로 나눠요</span></label>
+        </fieldset>
         <div class="row">
-          <button class="primary" id="expA">A 하이라이트 만들기</button>
-          <button class="primary" id="expB">B 하이라이트 만들기</button>
+          <button class="primary" id="expA">하이라이트 만들기</button>
+          <button id="expB" hidden>B</button>
+          <button id="swA" hidden>A</button>
+          <button id="swB" hidden>B</button>
+          <span class="status" id="expInfo"></span>
         </div>
-        <div class="row">
-          <button id="swA">A 스윙만 모음</button>
-          <button id="swB">B 스윙만 모음</button>
-        </div>
+        <p class="hint">하이라이트에는 두 사람이 주고받은 랠리 전체가 들어가요. 왕복 1번은 타구 2번(나 한 번, 상대 한 번)으로 계산해요. 카톡 전송용은 영상을 새로 압축하느라 하이라이트 길이의 1/3~1배 정도 시간이 걸려요.</p>
         <div class="bar"><i id="progX"></i></div>
         <span class="status" id="xStatus"></span>
         <div class="files" id="files"></div>
@@ -266,6 +282,7 @@ body.dragging .slot{outline:2px dashed var(--court);outline-offset:4px}
   </div>
 </div>
 
+<script type="importmap">{"imports":{"mediabunny":"https://cdn.jsdelivr.net/npm/mediabunny@1.59.0/+esm"}}</script>
 <script type="module">
 const MB_URL = 'https://cdn.jsdelivr.net/npm/mediabunny@1.59.0/+esm';
 let MB = null;
@@ -519,7 +536,6 @@ function updateLabelsLite(){
 function updateLabels(){
   for (const k of ['A','B']) { $('lab'+k).textContent = nm(k); $('vb'+k).textContent = nm(k); $('s'+k+'lab').textContent = `${nm(k)} 타구`; $('leg'+k).textContent = `${nm(k)} 타구`; }
   $('expA').textContent = '하이라이트 만들기';
-  $('swA').textContent = `${nm('A')} 타구만 모음`;
   if (!split) { $('sAlab').textContent = '타구'; $('legA').textContent = '타구'; }
   renderList();
 }
@@ -814,7 +830,7 @@ for (const [id, [o, f]] of Object.entries(ctrlMap)) {
 $('nudge').addEventListener('change', () => { buildEvents(); buildRallies(); renderAll(); });
 
 /* ---------- 렌더 ---------- */
-function renderAll(){ renderScore(); drawTL(); renderList(); }
+function renderAll(){ renderScore(); drawTL(); renderList(); updateExpInfo(); }
 function renderScore(){
   const on = rallies.filter(r => r.on);
   $('sRallies').textContent = rallies.length;
@@ -825,7 +841,8 @@ function renderScore(){
   $('sB').textContent = split ? events.filter(e => e.who === 'B').length : '–';
   $('legBwrap').hidden = !split;
   if (!two) $('singleNote').textContent = split ? '소리 크기로 카메라에 가까운 쪽과 먼 쪽 타구를 구분했어요.' : '가까운 쪽과 먼 쪽 타구의 소리 크기 차이가 작아서 따로 구분하지 않았어요.';
-  if (!two) { $('swA').hidden = !split; updateLabelsLite(); }
+  if (!two) updateLabelsLite();
+  updateExpInfo();
   $('singleNote').hidden = two;
   $('syncRow').hidden = !two;
   if (two) {
@@ -875,7 +892,7 @@ function renderList(){
   rallies.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'rally' + (r.on ? '' : ' off');
     const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'r' + i; cb.checked = r.on; cb.setAttribute('aria-label', `랠리 ${i+1} 포함`);
-    cb.addEventListener('change', () => { r.on = cb.checked; row.classList.toggle('off', !r.on); renderScore(); drawTL(); });
+    cb.addEventListener('change', () => { r.on = cb.checked; row.classList.toggle('off', !r.on); renderScore(); drawTL(); updateExpInfo(); });
     const no = document.createElement('span'); no.className = 'no'; no.textContent = i + 1;
     const t = document.createElement('label'); t.className = 't'; t.htmlFor = cb.id;
     t.innerHTML = `${fmt(r.s)} – ${fmt(r.e)}<small>${(r.e - r.s).toFixed(0)}초 · 타구 ${r.hits}번</small>`;
@@ -909,7 +926,7 @@ function setupPlayers(){
   const two = cams.A && cams.B;
   $('viewSeg').hidden = !two;
   $('expB').hidden = !cams.B; $('expA').hidden = !cams.A;
-  $('swA').hidden = !cams.A || !split; $('swB').hidden = true;
+  $('swA').hidden = true; $('swB').hidden = true; $('expB').hidden = true;
   setView(two ? 'both' : baseKey());
   updateLabels();
 }
@@ -964,6 +981,18 @@ for (const k of ['A','B']) vids[k].addEventListener('timeupdate', () => {
 
 /* ---------- 내보내기 (재인코딩 없이 잘라 붙이기) ---------- */
 const made = [];
+function rtMin(){ return +$('rtMin').value; }
+function pickRallies(){
+  const on = rallies.filter(r => r.on);
+  return $('whLong').checked ? on.filter(r => r.hits >= rtMin()*2) : on;
+}
+function updateExpInfo(){
+  const on = rallies.filter(r => r.on), lg = on.filter(r => r.hits >= rtMin()*2);
+  const dur = a => fmt(a.reduce((t, r) => t + r.e - r.s, 0));
+  $('whAllInfo').textContent = `${on.length}개 · ${dur(on)}`;
+  $('whLongInfo').textContent = `${lg.length}개 · ${dur(lg)}`;
+}
+$('rtMin').addEventListener('change', () => { $('whLong').checked = true; updateExpInfo(); });
 function swingSegs(k){
   const on = rallies.filter(r => r.on), out = [];
   for (const e of events) {
@@ -975,8 +1004,9 @@ function swingSegs(k){
 }
 async function exportCam(k, swing){
   const M = await mb();
-  const cam = cams[k], sel = swing ? swingSegs(k) : rallies.filter(r => r.on);
-  if (!sel.length) { $('xStatus').textContent = swing ? `체크된 랠리 안에 ${nm(k)}의 타구가 없어요.` : '체크된 랠리가 없어요.'; return; }
+  const cam = cams[k], sel = swing ? swingSegs(k) : pickRallies();
+  const kakao = !swing && $('qKakao').checked, longOnly = !swing && $('whLong').checked;
+  if (!sel.length) { $('xStatus').textContent = longOnly ? `왕복 ${rtMin()}번 이상인 랠리가 없어요. 횟수를 낮춰 보세요.` : '체크된 랠리가 없어요.'; return; }
   const btns = [$('expA'), $('expB'), $('swA'), $('swB')]; btns.forEach(b => b.disabled = true);
   stopPlay(); releaseVideos();
   trace(`${nm(k)} ${swing ? '스윙 모음' : '하이라이트'} 준비`);
@@ -992,9 +1022,10 @@ async function exportCam(k, swing){
     if (!segs.length) throw new Error(`${nm(k)} 영상에 해당 구간이 없어요.`);
     let out = null, vs, as, outT, bytes, firstV, firstA, part = 0;
     const stem = (files[k].name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g, '').trim() || 'tennis');
-    const base = `${stem}_${swing ? 'hits' : 'highlight'}`;
+    const base = `${stem}_${swing ? 'hits' : 'highlight'}${longOnly ? '_long' + rtMin() : ''}${kakao ? '_kakao' : ''}`;
     let sink = null;
     const disk = await opfsReady();
+    if (kakao) { await exportCompressed(M, cam, segs, base, bar, disk); return; }
     const limit = disk ? DISK_PART_LIMIT : PART_LIMIT;
     if (!disk) report('폰 저장공간에 바로 쓰기를 쓸 수 없어 메모리 방식으로 저장해요. 긴 하이라이트는 여러 파일로 나뉘어요.', '저장 방식');
     const open = async () => {
@@ -1063,10 +1094,91 @@ async function exportCam(k, swing){
     console.error(e); clearTrace(); report(e, '저장 파일 만들기'); $('xStatus').textContent = '만들기 실패: ' + (e.message || e);
   } finally { btns.forEach(b => b.disabled = false); restoreVideos(); }
 }
+/* ---------- 카톡 전송용: 720p·30fps로 다시 압축해서 300MB 이하 파일로 ---------- */
+const KAKAO_CAP = 280e6;            // 카톡 동영상 한도 300MB보다 조금 여유
+const A_RATE = 128e3, V_MAX = 4.5e6, V_GOOD = 3e6, V_MIN = 1.5e6;
+const AAC_URL = 'https://cdn.jsdelivr.net/npm/@mediabunny/aac-encoder@1.59.0/dist/bundles/mediabunny-aac-encoder.mjs';
+const TEST_CODEC = location.hash === '#vp9test' || location.hash === '#vp9aac';
+function planParts(segs){
+  const total = segs.reduce((t, g) => t + g.e - g.s, 0);
+  for (let n = 1; n <= 12; n++) {
+    const target = total / n, parts = [[]]; let acc = 0;
+    for (const g of segs) {
+      const d = g.e - g.s, cur = parts[parts.length-1];
+      if (cur.length && acc + d/2 > target && parts.length < n) { parts.push([g]); acc = d; }
+      else { cur.push(g); acc += d; }
+    }
+    const maxDur = Math.max(...parts.map(p => p.reduce((t, g) => t + g.e - g.s, 0)));
+    const vRate = Math.min(V_MAX, KAKAO_CAP*8*0.93/maxDur - A_RATE);
+    // 한 파일로 충분히 좋은 화질이면 1개, 아니면 2개까지 나눠 화질을 지키고, 그래도 부족하면 더 나눔
+    if (vRate >= V_GOOD || (n >= 2 && vRate >= V_MIN) || n === 12) return { parts, vRate: Math.max(V_MIN, vRate), total };
+  }
+}
+async function exportCompressed(M, cam, segs, base, bar, disk){
+  const { vTrack, aTrack } = cam;
+  if (!(await vTrack.canDecode())) throw new Error('이 브라우저가 이 영상 형식(아이폰 HEVC 등)을 읽지 못해서 압축할 수 없어요. 엣지 브라우저로 열어 보거나, 원본 화질로 저장해 주세요.');
+  const dw = await vTrack.getDisplayWidth(), dh = await vTrack.getDisplayHeight();
+  const sc = Math.min(1, 720 / Math.min(dw, dh));
+  const width = Math.round(dw*sc/2)*2, height = Math.round(dh*sc/2)*2;
+  const vCodec = TEST_CODEC ? 'vp9' : 'avc', aCodec = location.hash === '#vp9test' ? 'opus' : 'aac';
+  const plan = planParts(segs);
+  if (!(await M.canEncodeVideo(vCodec, { width, height, bitrate: plan.vRate }))) throw new Error('이 브라우저에서 H.264 압축을 지원하지 않아요. 크롬이나 엣지 최신 버전에서 써 주세요.');
+  if (aTrack && !(await M.canEncodeAudio(aCodec, { numberOfChannels: 2, sampleRate: 48000, bitrate: A_RATE }))) {
+    $('xStatus').textContent = '소리 압축 도구 불러오는 중…';
+    try { const ext = await import(AAC_URL); ext.registerAacEncoder(); }
+    catch (e) { throw new Error('소리 압축 도구(AAC)를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+  }
+  const vSink = new M.VideoSampleSink(vTrack), aSink = aTrack ? new M.AudioSampleSink(aTrack) : null;
+  let done = 0;
+  const label = '카톡용 하이라이트';
+  for (let pi = 0; pi < plan.parts.length; pi++) {
+    const part = plan.parts[pi];
+    const outName = `${base}${plan.parts.length > 1 ? '_' + (pi + 1) : ''}.mp4`;
+    const sink = disk ? diskSink(`${OPFS_PREFIX}out_${Date.now()}_${pi + 1}.mp4`, outName) : blobSink();
+    const out = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: false }), target: new M.StreamTarget(sink.stream, { chunked: true, chunkSize: 4 * 2**20 }) });
+    const vs = new M.VideoSampleSource({ codec: vCodec, quality: new M.Quality({ bitrate: Math.round(plan.vRate) }), keyFrameInterval: 2,
+      transform: { width, height, fit: 'contain', frameRate: 30 } });
+    out.addVideoTrack(vs);
+    let as = null;
+    if (aTrack) { as = new M.AudioSampleSource({ codec: aCodec, quality: new M.Quality({ bitrate: A_RATE }) }); out.addAudioTrack(as); }
+    await out.start();
+    let outT = 0;
+    for (let si = 0; si < part.length; si++) {
+      const { s, e } = part[si];
+      trace(`${label} ${pi + 1}번 파일 · 구간 ${si + 1}/${part.length}`);
+      let n = 0;
+      for await (const v of vSink.samples(s, e)) {
+        if (v.timestamp < s - 1e-3 || v.timestamp >= e) { v.close(); if (v.timestamp >= e) break; continue; }
+        v.setTimestamp(v.timestamp - s + outT);
+        await vs.add(v); v.close();
+        if (++n % 30 === 0) {
+          const prog = (done + (v.timestamp - outT)) / plan.total;
+          bar.style.width = (Math.min(1, prog)*100).toFixed(1) + '%';
+          $('xStatus').textContent = `${label} 만드는 중… ${Math.round(prog*100)}%` + (plan.parts.length > 1 ? ` (${pi + 1}/${plan.parts.length}번 파일)` : '');
+        }
+      }
+      if (aSink) {
+        for await (const a of aSink.samples(s, e)) {
+          if (a.timestamp < s - 1e-3) { a.close(); continue; }
+          if (a.timestamp >= e) { a.close(); break; }
+          a.setTimestamp(a.timestamp - s + outT);
+          await as.add(a); a.close();
+        }
+      }
+      outT += e - s; done += e - s;
+    }
+    vs.close(); if (as) as.close();
+    trace(`${label} ${pi + 1}번 파일 마무리 중`);
+    await out.finalize();
+    addFile(outName, await sink.result(), outT);
+  }
+  bar.style.width = '100%';
+  clearTrace();
+  $('xStatus').textContent = `${label} 완성 (${plan.parts.length}개 파일, 720p). 아래 '저장'을 누르면 다운로드 폴더에 저장돼요.`;
+}
 $('expA').addEventListener('click', () => exportCam('A'));
 $('expB').addEventListener('click', () => exportCam('B'));
-$('swA').addEventListener('click', () => exportCam('A', true));
-$('swB').addEventListener('click', () => exportCam('B', true));
+
 
 let downloadsP = null;
 function getDownloads(){ if (!downloadsP) downloadsP = (window.claude?.use ? window.claude.use('downloads') : Promise.resolve(null)).catch(() => null); return downloadsP; }
